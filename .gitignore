@@ -1,0 +1,33 @@
+# Environments
+.env
+.venv/
+env/
+venv/
+
+# Python Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDEs
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Datos de entrada brutos (ignoramos su contenido pero conservamos la carpeta)
+datos_entrada/*
+!datos_entrada/.gitkeep
+
+# Salidas de visualización (ignoramos PDFs y PNGs)
+salidas_viz_final/*
+!salidas_viz_final/.gitkeep
+
+# Respaldos
+respaldo/*
+!respaldo/.gitkeep
+
+# Logs
+*.log

@@ -1,0 +1,73 @@
+# ==========================================
+# CONFIGURACIÓN DEL REPORTE ESTRATÉGICO 
+# “MÓDULO 01 — config.yaml”
+# ==========================================
+
+tiempo:
+  anio_analisis: 2024         # Año principal (Current Year)
+  anio_objetivo: 2025         # Año meta/proyección
+  anio_previo: 2023           # Año anterior (para comparación YoY)
+  anio_historico_inicio: 2022 # Inicio de las series de tiempo
+
+rutas:
+  # Carpeta donde se depositan los Excels nuevos cada mes
+  archivo_entrada: "datos_entrada"
+  carpeta_salida: "salidas_viz_final"
+  nombre_pdf_prefijo: "Reporte_Estrategico_INFONAVIT"
+
+metricas:
+  col_monto: "Monto de crédito Infonavit"
+  col_num: "Número de créditos formalizados"
+
+# --------------------------------------------------
+# ESTILOS — SOLO PALETA CORPORATIVA (sin rojo alarma)
+# --------------------------------------------------
+estilos:
+  color_positivo: "#235B4E"        # Verde institucional (crecimiento / favorable)
+  color_negativo: "#9F2241"        # Guinda corporativo (caída / ajuste)
+  color_neutro: "#6F7271"          # Gris institucional
+  color_corporativo: "#691C32"     # Vino Infonavit (primario)
+
+  # (opcionales para escalabilidad visual futura)
+  color_secundario: "#10312B"      # Verde profundo
+  color_acento: "#BC955C"          # Dorado institucional
+  color_fondo_suave: "#DDC9A3"     # Beige institucional
+  color_texto_suave: "#98989A"     # Gris claro
+
+# --------------------------------------------------
+# Mapeo de ID de estado a Nombre
+# --------------------------------------------------
+estados_mx:
+  1: "Aguascalientes"
+  2: "Baja California"
+  3: "Baja California Sur"
+  4: "Campeche"
+  5: "Coahuila"
+  6: "Colima"
+  7: "Chiapas"
+  8: "Chihuahua"
+  9: "Ciudad de México"
+  10: "Durango"
+  11: "Guanajuato"
+  12: "Guerrero"
+  13: "Hidalgo"
+  14: "Jalisco"
+  15: "Estado de México"
+  16: "Michoacán"
+  17: "Morelos"
+  18: "Nayarit"
+  19: "Nuevo León"
+  20: "Oaxaca"
+  21: "Puebla"
+  22: "Querétaro"
+  23: "Quintana Roo"
+  24: "San Luis Potosí"
+  25: "Sinaloa"
+  26: "Sonora"
+  27: "Tabasco"
+  28: "Tamaulipas"
+  29: "Tlaxcala"
+  30: "Veracruz"
+  31: "Yucatán"
+  32: "Zacatecas"
+  33: "Nacional"
