@@ -2,13 +2,12 @@ import pandas as pd
 from sqlalchemy import inspect, text
 from database import engine
 
-def migrate():
+def migrate(csv_path="SII_concentrado_v3.csv"):
     print("Iniciando migración de CSV a PostgreSQL...")
     if engine is None:
         print("❌ Error: No se pudo conectar a la base de datos.")
-        return
+        return False
 
-    csv_path = "SII_concentrado_v3.csv"
     table_name = "infonavit_historico"
 
     try:
@@ -19,12 +18,12 @@ def migrate():
         
         if "id_reporte" not in df.columns:
             print("❌ Error: El CSV no contiene la columna obligatoria 'id_reporte'.")
-            return
+            return False
 
         ids_vacios = df["id_reporte"].isna() | (df["id_reporte"].astype(str).str.strip() == "")
         if ids_vacios.any():
             print(f"❌ Error: El CSV contiene {ids_vacios.sum()} registros sin 'id_reporte'.")
-            return
+            return False
 
         duplicados_csv = df.duplicated(subset=["id_reporte"], keep="last").sum()
         total_ids_unicos = df["id_reporte"].nunique()
@@ -115,10 +114,13 @@ def migrate():
             f"SELECT id_reporte, COUNT(*) FROM {table_name} "
             "GROUP BY id_reporte HAVING COUNT(*) > 1;"
         )
+        return True
     except FileNotFoundError:
         print(f"❌ Error: El archivo {csv_path} no fue encontrado.")
+        return False
     except Exception as e:
         print(f"❌ Error durante la migración: {e}")
+        return False
 
 if __name__ == "__main__":
     migrate()

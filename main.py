@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import config
 import etl
 import viz
+from migrate_csv_to_pg import migrate
 
 # Configuración de logs
 logging.basicConfig(
@@ -71,7 +72,23 @@ def main():
     # 1. Configuración
     cargar_configuracion_yaml()
 
-    # 2. PDF Global
+    # 2. ETL
+    manager = etl.DataManager()
+    try:
+        manager.run_etl()
+    except Exception as e:
+        logger.error(f"Error en ETL: {e}", exc_info=True)
+        return
+
+    # 3. Sincronización PostgreSQL
+    logger.info("Sincronizando histórico consolidado con PostgreSQL...")
+    input_path = Path(str(config.FILE_INPUT))
+    csv_path = input_path if input_path.suffix.lower() == ".csv" else Path("SII_concentrado_v3.csv")
+    if not migrate(csv_path=str(csv_path)):
+        logger.error("Error en sincronización PostgreSQL. El reporte no será generado.")
+        return
+
+    # 4. PDF Global
     nombre_pdf = f"{config.PDF_NAME_PREFIX}_{config.ANIO_ANALISIS}.pdf"
     ruta_pdf = config.OUTDIR / nombre_pdf
     
@@ -81,15 +98,7 @@ def main():
         # Portada
         viz.crear_portada_pdf()
 
-        # 3. ETL
-        manager = etl.DataManager()
-        try:
-            manager.run_etl()
-        except Exception as e:
-            logger.error(f"Error en ETL: {e}", exc_info=True)
-            return
-
-        # 4. Estilos Matplotlib
+        # 5. Estilos Matplotlib
         plt.style.use('seaborn-v0_8-whitegrid')
         plt.rcParams['font.family'] = 'sans-serif'
         plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans']

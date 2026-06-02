@@ -10,6 +10,7 @@
 Sistema integral en **Python** para:
 - transformar información del **SII INFONAVIT** (Excel → CSV),
 - consolidar y estandarizar datos,
+- sincronizar el histórico consolidado con **PostgreSQL**,
 - generar **análisis económico-financiero**,
 - producir **visualizaciones ejecutivas** y un **PDF automatizado**.
 
@@ -35,6 +36,10 @@ Este repositorio implementa un **pipeline completo**:
 4. **Capa de visualización**
    - +40 gráficas estratégicas
    - Exportación automática a PDF ejecutivo
+5. **Persistencia PostgreSQL**
+   - Sincronización incremental por `id_reporte`
+   - Inserción de registros nuevos y actualización de correcciones
+   - Sin eliminación ni recreación de la tabla histórica durante la sincronización
 
 ---
 
@@ -50,6 +55,9 @@ Este repositorio implementa un **pipeline completo**:
 │
 ├── config.yaml             # Configuración general del proyecto
 ├── config.py               # Variables globales inyectadas
+├── .env.example            # Plantilla de conexión a PostgreSQL
+├── database.py             # Configuración de conexión a PostgreSQL
+├── migrate_csv_to_pg.py    # Sincronización incremental CSV → PostgreSQL
 │
 ├── etl.py                  # DataManager (ETL + datasets analíticos)
 ├── viz/                    # Paquete de visualizaciones modularizadas
@@ -80,6 +88,14 @@ Carga estandarizada (DataManager)
         ↓
 Amasado analítico (df_master, df_global, etc.)
         ↓
+Validación de id_reporte
+        ↓
+Tabla temporal de staging
+        ↓
+Upsert PostgreSQL por id_reporte
+        ↓
+Tabla infonavit_historico actualizada
+        ↓
 Visualizaciones
         ↓
 PDF Ejecutivo Final
@@ -98,6 +114,8 @@ CSV estándar consolidado
 DataManager (ETL analítico)
         ↓
 Datasets derivados
+        ↓
+Sincronización PostgreSQL por id_reporte
         ↓
 Visualizaciones estratégicas
         ↓
@@ -128,7 +146,7 @@ El CSV generado (SII_concentrado_v3.csv) sigue un contrato de datos fijo:
 
 |Columna | Descripción|Tipo de Dato (Sugerido)|
 |--------|------------|-----------------------|
-|id_reporte| Hash MD5 único por periodo/estado/línea/métrica|String | UUID |
+|id_reporte| Hash MD5 único por periodo, estado, línea, producto y métrica|String |
 |anio|Año extraído del nombre del archivo|Integer|
 |mes|Mes calendario (1–12)|Integer|
 |estado|ID numérico que identifica a la entidad federativa|Integer / Categorical|
@@ -153,8 +171,81 @@ El proceso:
 1. Lee configuración (<mark style="background-color: #E0E0E0;"> config.yaml </mark>)
 2. Ejecuta ETL (si aplica)
 3. Construye datasets analíticos
-4. Genera gráficas en secuencia definida
-5. Exporta un PDF ejecutivo en <mark style="background-color: #E0E0E0;"> salidas_viz_final/ </mark>
+4. Sincroniza PostgreSQL mediante upsert por `id_reporte`
+5. Genera gráficas en secuencia definida
+6. Exporta un PDF ejecutivo en <mark style="background-color: #E0E0E0;"> salidas_viz_final/ </mark>
+
+Si la sincronización PostgreSQL falla, el reporte se detiene antes de generar el PDF.
+
+---
+
+## 🐘 Sincronización incremental con PostgreSQL
+
+La carga a PostgreSQL forma parte de la ejecución de `main.py`. Después del ETL, el sistema sincroniza el CSV configurado directamente o `SII_concentrado_v3.csv` cuando la fuente es una carpeta o un archivo Excel.
+
+### Configuración
+
+1. Crea el archivo `.env` a partir de `.env.example`.
+2. Completa las variables de conexión:
+
+```text
+DB_USER=postgres
+DB_PASSWORD=tu_password_aqui
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=infonavit
+```
+
+El archivo `.env` contiene credenciales locales y está excluido de Git.
+
+### Ejecución manual de soporte
+
+Normalmente no necesitas ejecutar el migrador por separado porque `main.py` ya lo invoca. Para sincronizar PostgreSQL sin regenerar visualizaciones ni PDF, puedes ejecutar:
+
+```bash
+python migrate_csv_to_pg.py
+```
+
+El proceso:
+
+1. Lee `SII_concentrado_v3.csv`.
+2. Valida que exista `id_reporte` y que no tenga valores vacíos.
+3. Detecta duplicados dentro del CSV y conserva la última versión de cada `id_reporte`.
+4. Crea `infonavit_historico` únicamente si todavía no existe.
+5. Conserva la tabla existente sin eliminarla ni recrearla.
+6. Carga los datos en una tabla temporal de staging.
+7. Ejecuta un upsert transaccional:
+   - inserta los `id_reporte` nuevos;
+   - actualiza los registros existentes con la versión más reciente del CSV.
+
+La tabla final utiliza un índice único sobre `id_reporte`. Si ya existen duplicados históricos en PostgreSQL, la sincronización se detiene sin borrar información para permitir una revisión explícita.
+
+La cuenta PostgreSQL necesita permisos para crear la tabla inicial, crear el índice único y utilizar una tabla temporal. En cada ejecución, el script informa:
+
+- total de filas leídas del CSV;
+- total de `id_reporte` únicos;
+- duplicados detectados en el CSV;
+- regla aplicada a duplicados: conservar la última versión;
+- confirmación de que la sincronización terminó dentro de una transacción;
+- confirmación de que la tabla final no fue eliminada ni recreada durante la sincronización.
+
+### Validación recomendada
+
+Después de sincronizar, valida que no existan duplicados:
+
+```sql
+SELECT
+    COUNT(*) AS filas_totales,
+    COUNT(DISTINCT id_reporte) AS ids_unicos
+FROM infonavit_historico;
+
+SELECT id_reporte, COUNT(*)
+FROM infonavit_historico
+GROUP BY id_reporte
+HAVING COUNT(*) > 1;
+```
+
+En la primera consulta, ambos conteos deben coincidir. La segunda consulta debe devolver cero filas.
 
 ---
 
