@@ -1,192 +1,87 @@
-# 📊 Reporte Estratégico INFONAVIT 2026  
-**ETL + Análisis + Visualización Automatizada**
+# Reporte Ejecutivo INFONAVIT 2026
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)
-![Pandas](https://img.shields.io/badge/Pandas-Data%20Analysis-green?logo=pandas)
-![ETL](https://img.shields.io/badge/ETL-Pipeline-orange)
-![Matplotlib](https://img.shields.io/badge/Matplotlib-Visualization-informational)
-![Status](https://img.shields.io/badge/Status-Stable-success)
+Pipeline Python para consolidar informacion del Sistema de Informacion Infonavit (SII), generar datasets analiticos, producir visualizaciones ejecutivas, exportar un PDF y sincronizar opcionalmente el historico consolidado con PostgreSQL.
 
-Sistema integral en **Python** para:
-- transformar información del **SII INFONAVIT** (Excel → CSV),
-- consolidar y estandarizar datos,
-- sincronizar el histórico consolidado con **PostgreSQL**,
-- generar **análisis económico-financiero**,
-- producir **visualizaciones ejecutivas** y un **PDF automatizado**.
+El proyecto esta orientado a ejecucion operativa local y deja lista la base para despliegues posteriores en servicios como Cloud Run, Supabase u otra infraestructura administrada.
 
-Diseñado para entornos reales de análisis, no para demos.
+## Estado Actual
 
----
+- Python recomendado: 3.11.
+- Entorno validado con Python 3.11.9.
+- PostgreSQL configurable y no bloqueante si `database.fail_on_error: false`.
+- ETL con zonas de trabajo para no procesar directamente originales.
+- Validacion formal de contrato de datos.
+- Logging por corrida.
+- Manifest JSON por corrida ETL.
+- Suite minima de pruebas con pytest.
+- PDF ejecutivo generado correctamente para 2026.
 
-## 🧠 Enfoque del proyecto
-
-Este repositorio implementa un **pipeline completo**:
-
-1. **Ingesta flexible**
-   - Excel individual
-   - Carpeta con múltiples Excels
-   - CSV consolidado
-2. **ETL robusto**
-   - Normalización territorial y temporal
-   - Métricas homogéneas
-   - Llave única (`id_reporte`)
-3. **Capa analítica**
-   - Métricas globales, por línea, producto y estado
-   - Identificación de patrones y “culpables”
-4. **Capa de visualización**
-   - +40 gráficas estratégicas
-   - Exportación automática a PDF ejecutivo
-5. **Persistencia PostgreSQL**
-   - Sincronización incremental por `id_reporte`
-   - Inserción de registros nuevos y actualización de correcciones
-   - Sin eliminación ni recreación de la tabla histórica durante la sincronización
-
----
-
-## 🗂️ Estructura del proyecto
+## Estructura
 
 ```text
 001_reporte_2026_gpt/
-├── datos_entrada/          # Excels fuente (SII)
-├── docs/                   # Documentación interna
-│   └── project_state.md
-├── respaldo/               # Backups / históricos
-├── salidas_viz_final/      # PDFs y gráficos finales
-│
-├── config.yaml             # Configuración general del proyecto
-├── config.py               # Variables globales inyectadas
-├── .env.example            # Plantilla de conexión a PostgreSQL
-├── database.py             # Configuración de conexión a PostgreSQL
-├── migrate_csv_to_pg.py    # Sincronización incremental CSV → PostgreSQL
-│
-├── etl.py                  # DataManager (ETL + datasets analíticos)
-├── viz/                    # Paquete de visualizaciones modularizadas
-│   ├── macro.py            # Gráficas de nivel nacional y métricas globales
-│   ├── lineas.py           # Análisis de líneas estratégicas y productos
-│   ├── geo.py              # Visualizaciones geográficas (mapas, pareto)
-│   ├── estrategia.py       # Matrices, scorecards y mapas de calor
-│   ├── helpers.py          # Formateadores y utilidades compartidas
-│   └── __init__.py         # Puente de compatibilidad
-├── utils.py                # Utilidades comunes
-├── main.py                 # Orquestador del pipeline completo
-│
-├── SII_concentrado_v3.csv  # CSV consolidado (autogenerado)
-└── README.md
+|-- datos_entrada/              # Archivos originales de entrada; contenido ignorado por Git
+|-- datos_work/                 # Copias temporales de trabajo; contenido ignorado por Git
+|-- datos_procesados/           # Copias opcionales de archivos procesados; contenido ignorado por Git
+|-- datos_error/                # Copias de archivos rechazados o fallidos; contenido ignorado por Git
+|-- logs/                       # Logs y manifests de corrida; contenido ignorado por Git
+|   `-- runs/
+|-- respaldo/                   # Respaldos locales; contenido ignorado por Git
+|-- salidas_viz_final/          # PNGs y PDF generados; contenido ignorado por Git
+|-- tests/                      # Pruebas unitarias y operativas minimas
+|-- viz/                        # Visualizaciones
+|-- config.yaml                 # Configuracion operativa
+|-- config.py                   # Defaults y variables inyectadas desde YAML
+|-- contract_validator.py       # Validador de contrato CSV/dataset
+|-- database.py                 # Conexion y health check PostgreSQL
+|-- etl.py                      # DataManager y transformaciones analiticas
+|-- main.py                     # Orquestador principal
+|-- migrate_csv_to_pg.py        # Sincronizacion incremental PostgreSQL
+|-- sii_excel_etl.py            # Ingesta Excel SII y zonas operativas
+|-- requirements.txt
+`-- PLAN_TRABAJO_ESTABILIZACION.md
 ```
 
----
+## Requisitos
 
-## 🔁 Flujo general del sistema
+- Python 3.11 recomendado.
+- Windows PowerShell o terminal equivalente.
+- PostgreSQL opcional.
 
-```text
+No usar Python 3.14 como base operativa por ahora.
 
-Excel / Carpeta / CSV
-        ↓
-ETL Excel → CSV (si aplica)
-        ↓
-Carga estandarizada (DataManager)
-        ↓
-Amasado analítico (df_master, df_global, etc.)
-        ↓
-Validación de id_reporte
-        ↓
-Tabla temporal de staging
-        ↓
-Upsert PostgreSQL por id_reporte
-        ↓
-Tabla infonavit_historico actualizada
-        ↓
-Visualizaciones
-        ↓
-PDF Ejecutivo Final
-```
----
+## Instalacion
 
-## 🔄 Pipeline del sistema
+Desde la raiz del proyecto:
 
-```text
-Fuentes (Excel / CSV)
-        ↓
-ETL Excel → CSV (normalización)
-        ↓
-CSV estándar consolidado
-        ↓
-DataManager (ETL analítico)
-        ↓
-Datasets derivados
-        ↓
-Sincronización PostgreSQL por id_reporte
-        ↓
-Visualizaciones estratégicas
-        ↓
-PDF Ejecutivo Final
-
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
----
+Si `py` no esta disponible:
 
-## 📥 Insumos soportados
-
-El sistema detecta automáticamente el tipo de entrada configurado en config.yaml:
-
-```text
-rutas:
-  archivo_entrada: "datos_entrada"        # carpeta con Excels
-  # archivo_entrada: "SII_2026_enero.xlsx" # Excel individual
-  # archivo_entrada: "SII_concentrado_v3.csv" # CSV directo
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-No se requiere cambiar código.
+Validacion basica:
 
----
-
-## 📄 Estructura del CSV consolidado
-
-El CSV generado (SII_concentrado_v3.csv) sigue un contrato de datos fijo:
-
-|Columna | Descripción|Tipo de Dato (Sugerido)|
-|--------|------------|-----------------------|
-|id_reporte| Hash MD5 único por periodo, estado, línea, producto y métrica|String |
-|anio|Año extraído del nombre del archivo|Integer|
-|mes|Mes calendario (1–12)|Integer|
-|estado|ID numérico que identifica a la entidad federativa|Integer / Categorical|
-|linea|Clasificación de la línea de crédito|String|
-|producto|Nombre del producto financiero|String|
-|metrica|Tipo de medición (Monto o Número de créditos)|String / Categorical|
-|valor|Magnitud numérica de la métrica|Float / Decimal|
-|fuente|Origen de los datos (INFONAVIT_SII)|String (Constant)|
-|periodicidad|Frecuencia de actualización (Mensual)|String (Constant)|
-|timestamp|Registro exacto de la fecha y hora de carga|DateTime|
-
----
-
-## ▶️ Ejecución del reporte
-
-```bash
-python main.py
+```powershell
+python -c "import pandas, numpy, matplotlib, yaml, sqlalchemy; print('imports ok')"
+python -c "import yaml; print(yaml.safe_load(open('config.yaml', encoding='utf-8')).keys())"
 ```
 
-El proceso:
+## Variables de Entorno
 
-1. Lee configuración (<mark style="background-color: #E0E0E0;"> config.yaml </mark>)
-2. Ejecuta ETL (si aplica)
-3. Construye datasets analíticos
-4. Sincroniza PostgreSQL mediante upsert por `id_reporte`
-5. Genera gráficas en secuencia definida
-6. Exporta un PDF ejecutivo en <mark style="background-color: #E0E0E0;"> salidas_viz_final/ </mark>
+Crea `.env` a partir de `.env.example`.
 
-Si la sincronización PostgreSQL falla, el reporte se detiene antes de generar el PDF.
-
----
-
-## 🐘 Sincronización incremental con PostgreSQL
-
-La carga a PostgreSQL forma parte de la ejecución de `main.py`. Después del ETL, el sistema sincroniza el CSV configurado directamente o `SII_concentrado_v3.csv` cuando la fuente es una carpeta o un archivo Excel.
-
-### Configuración
-
-1. Crea el archivo `.env` a partir de `.env.example`.
-2. Completa las variables de conexión:
+Ejemplo:
 
 ```text
 DB_USER=postgres
@@ -196,42 +91,141 @@ DB_PORT=5432
 DB_NAME=infonavit
 ```
 
-El archivo `.env` contiene credenciales locales y está excluido de Git.
+Tambien puedes usar:
 
-### Ejecución manual de soporte
-
-Normalmente no necesitas ejecutar el migrador por separado porque `main.py` ya lo invoca. Para sincronizar PostgreSQL sin regenerar visualizaciones ni PDF, puedes ejecutar:
-
-```bash
-python migrate_csv_to_pg.py
+```text
+DATABASE_URL=postgresql+psycopg2://usuario:password@host:5432/base
 ```
 
-El proceso:
+`.env` y `.env.*` estan ignorados por Git. `.env.example` si debe versionarse.
 
-1. Lee `SII_concentrado_v3.csv`.
-2. Valida que exista `id_reporte` y que no tenga valores vacíos.
-3. Detecta duplicados dentro del CSV y conserva la última versión de cada `id_reporte`.
-4. Crea `infonavit_historico` únicamente si todavía no existe.
-5. Conserva la tabla existente sin eliminarla ni recrearla.
-6. Carga los datos en una tabla temporal de staging.
-7. Ejecuta un upsert transaccional:
-   - inserta los `id_reporte` nuevos;
-   - actualiza los registros existentes con la versión más reciente del CSV.
+## Configuracion Principal
 
-La tabla final utiliza un índice único sobre `id_reporte`. Si ya existen duplicados históricos en PostgreSQL, la sincronización se detiene sin borrar información para permitir una revisión explícita.
+Archivo: `config.yaml`.
 
-La cuenta PostgreSQL necesita permisos para crear la tabla inicial, crear el índice único y utilizar una tabla temporal. En cada ejecución, el script informa:
+### Tiempo
 
-- total de filas leídas del CSV;
-- total de `id_reporte` únicos;
-- duplicados detectados en el CSV;
-- regla aplicada a duplicados: conservar la última versión;
-- confirmación de que la sincronización terminó dentro de una transacción;
-- confirmación de que la tabla final no fue eliminada ni recreada durante la sincronización.
+```yaml
+tiempo:
+  anio_analisis: 2026
+  anio_objetivo: 2026
+  anio_previo: 2025
+  anio_historico_inicio: 2024
+```
 
-### Validación recomendada
+`anio_historico_inicio` controla series como la carrera acumulada y el rango de portada.
 
-Después de sincronizar, valida que no existan duplicados:
+### Entrada y salida
+
+```yaml
+rutas:
+  archivo_entrada: "datos_entrada"
+  carpeta_salida: "salidas_viz_final"
+  nombre_pdf_prefijo: "Reporte_Estrategico_INFONAVIT"
+```
+
+`archivo_entrada` puede apuntar a:
+
+- carpeta con Excels SII;
+- Excel individual `.xls` o `.xlsx`;
+- CSV consolidado.
+
+## ETL Operativo
+
+Configuracion:
+
+```yaml
+etl:
+  mover_procesados: false
+  usar_zona_trabajo: true
+  ruta_work: datos_work
+  ruta_procesados: datos_procesados
+  ruta_error: datos_error
+```
+
+Comportamiento:
+
+- `datos_entrada/` contiene archivos originales.
+- Los originales no se mueven ni se modifican por defecto.
+- Si `usar_zona_trabajo: true`, cada Excel se copia a `datos_work/` y se procesa la copia.
+- Si un archivo falla, se copia a `datos_error/` y se registra el motivo.
+- Si un archivo procesa bien y `mover_procesados: true`, se copia a `datos_procesados/`.
+- Si `mover_procesados: false`, no se copia a procesados.
+
+El ETL genera manifests en:
+
+```text
+logs/runs/run_YYYYMMDD_HHMMSS.json
+```
+
+Campos principales:
+
+```json
+{
+  "run_id": "...",
+  "started_at": "...",
+  "finished_at": "...",
+  "files": [
+    {
+      "source_file": "...",
+      "work_file": "...",
+      "status": "ok | error | skipped",
+      "message": "...",
+      "error_type": "...",
+      "destination": "..."
+    }
+  ]
+}
+```
+
+## Contrato de Datos
+
+El CSV consolidado debe incluir:
+
+- `id_reporte`
+- `anio`
+- `estado`
+- `mes`
+- `linea`
+- `producto`
+- `metrica`
+- `valor`
+- `periodicidad`
+- `fuente`
+- `timestamp`
+
+Validaciones principales:
+
+- columnas obligatorias;
+- `id_reporte` presente;
+- duplicados de `id_reporte`;
+- `anio` valido;
+- `mes` entre 1 y 12;
+- `valor` numerico;
+- catalogo de estados;
+- metricas reconocidas;
+- advertencia por comparabilidad temporal parcial.
+
+## PostgreSQL
+
+Configuracion:
+
+```yaml
+database:
+  enabled: true
+  fail_on_error: false
+  health_check: true
+```
+
+Comportamiento:
+
+- `enabled: false`: genera reporte sin tocar PostgreSQL.
+- `enabled: true` y `fail_on_error: false`: intenta sincronizar; si falla, continua con el PDF.
+- `enabled: true` y `fail_on_error: true`: si PostgreSQL falla, detiene la ejecucion.
+
+El migrador usa `id_reporte` para upsert incremental en `infonavit_historico`.
+
+Validacion recomendada en PostgreSQL:
 
 ```sql
 SELECT
@@ -245,71 +239,105 @@ GROUP BY id_reporte
 HAVING COUNT(*) > 1;
 ```
 
-En la primera consulta, ambos conteos deben coincidir. La segunda consulta debe devolver cero filas.
+## Ejecucion del Reporte
 
----
+```powershell
+.\.venv\Scripts\activate
+python main.py
+```
 
-## 📊 Datasets principales generados
+Resultado esperado:
 
-Dentro de DataManager:
+- CSV consolidado local si se procesan Excels.
+- PNGs en `salidas_viz_final/`.
+- PDF en `salidas_viz_final/Reporte_Estrategico_INFONAVIT_2026.pdf`.
+- Log de corrida en `logs/reporte_YYYYMMDD_HHMMSS.log`.
+- Manifest ETL en `logs/runs/`.
 
-* <mark style="background-color: #E0E0E0;"> df_master </mark> → dataset base analítico 
+## Logging
 
-* <mark style="background-color: #E0E0E0;"> df_global </mark> → agregados nacionales 
+Cada ejecucion crea:
 
-* <mark style="background-color: #E0E0E0;"> df_linea_mensual </mark> → evolución por línea 
+```text
+logs/reporte_YYYYMMDD_HHMMSS.log
+```
 
-* <mark style="background-color: #E0E0E0;"> df_raw_monto </mark> / <mark style="background-color: #E0E0E0;"> df_raw_num </mark> → insumos crudos 
+El log registra:
 
-* <mark style="background-color: #E0E0E0;"> df_analisis_global </mark> → métricas derivadas 
+- carga de configuracion;
+- ETL;
+- validaciones;
+- health check PostgreSQL;
+- migracion;
+- generacion de PNGs;
+- exportacion PDF;
+- errores con stack trace cuando aplica.
 
-Estos datasets alimentan todas las visualizaciones.
+## Pruebas
 
----
+Ejecutar:
 
-## 🧩 Principios de diseño
+```powershell
+.\.venv\Scripts\activate
+python -m pytest -q
+```
 
-❌ Sin lógica de ETL en visualizaciones
+Cobertura minima actual:
 
-❌ Sin “scripts mágicos”
+- contrato de columnas obligatorias;
+- `id_reporte` no nulo;
+- duplicados de `id_reporte`;
+- rango de `mes`;
+- anios configurados;
+- advertencia por ventanas temporales parciales;
+- ETL operativo con Excel invalido;
+- manifest y zona de error;
+- CSV en carpeta marcado como `skipped`.
 
-✅ Contrato de datos explícito
+## Politica de Git
 
-✅ Reproducibilidad
+El repositorio debe versionar:
 
-✅ Escalable a nuevas fuentes (SHF, CNBV, Banxico)
+- codigo;
+- configuracion sin secretos;
+- documentacion;
+- tests;
+- estructuras vacias con `.gitkeep`;
+- muestras controladas futuras en `data_samples/`.
 
----
+No debe versionar:
 
-## 🚧 Roadmap natural
+- `.env`;
+- `.venv/`;
+- CSVs productivos;
+- Excels;
+- PNGs;
+- PDFs;
+- logs;
+- manifests;
+- zonas operativas con datos;
+- respaldos reales.
 
-*  Integración de nuevas fuentes (SHF, Banxico)
+## Publicacion Productiva
 
-*  Tests automáticos del ETL
+La base esta preparada para evolucionar hacia:
 
-* CLI con argumentos (--input, --force)
+- Cloud Run u otro servicio de ejecucion;
+- Supabase/PostgreSQL administrado;
+- runner web o frontend para usuarios;
+- CI con pruebas automatizadas;
+- almacenamiento externo de insumos y salidas.
 
-*  Publicación como paquete interno
+Antes de productivo, pendientes recomendados:
 
-*  API de consulta de indicadores
+- fixture de Excel valido minimo;
+- smoke test de una grafica principal;
+- prueba opcional de integracion PostgreSQL;
+- politica de retencion/limpieza de logs y zonas ETL;
+- README de `datos_entrada/` con convencion de nombres de archivos.
 
----
+## Autor y Fuente
 
-## 🧑‍💻 Autor
+Autor: Edgar Trejo (@etrejoh)
 
-Proyecto desarrollado para análisis estratégico del mercado de crédito y vivienda en México, con enfoque en:
-
-* análisis económico,
-
-* toma de decisiones ejecutivas,
-
-* automatización reproducible.
-
----
-
-## 📄 Licencia
-
-Uso interno / analítico.
-Licencia abierta (MIT).
-
----
+El presente fue elaborado con datos del Sistema de Informacion Infonavit (SII) publicados en el portal www.portalmx.infonavit.org.mx.
