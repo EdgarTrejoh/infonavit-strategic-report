@@ -11,10 +11,15 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import config
+from contract_validator import (
+    format_validation_messages,
+    temporal_comparability_warnings,
+    validate_consolidated_dataframe,
+)
 
 # ✅ IMPORTA TU ETL EXCEL→CSV (ajusta el nombre del archivo si aplica)
 # Opción A (recomendado): sii_excel_etl.py
-from sii_excel_etl import procesar_archivo_sii, ejecutar_concentrado
+from sii_excel_etl import ejecutar_archivo_excel, ejecutar_concentrado
 # Opción B: si tu archivo se llama infonavit_etl.py
 # from infonavit_etl import procesar_archivo_sii, ejecutar_concentrado
 
@@ -83,7 +88,15 @@ class DataManager:
         # Caso: carpeta con Excels
         if p.is_dir():
             logger.info("Input detectado como carpeta: %s", p)
-            ejecutar_concentrado(str(p), archivo_salida=str(csv_out))
+            ejecutar_concentrado(
+                str(p),
+                archivo_salida=str(csv_out),
+                mover_procesados=config.ETL_MOVER_PROCESADOS,
+                usar_zona_trabajo=config.ETL_USAR_ZONA_TRABAJO,
+                ruta_work=config.ETL_RUTA_WORK,
+                ruta_procesados=config.ETL_RUTA_PROCESADOS,
+                ruta_error=config.ETL_RUTA_ERROR,
+            )
             if not csv_out.exists():
                 raise FileNotFoundError(f"No se generó el CSV consolidado: {csv_out}")
             return str(csv_out)
@@ -92,7 +105,14 @@ class DataManager:
         if p.is_file() and p.suffix.lower() in (".xlsx", ".xls"):
             logger.info("Input detectado como Excel: %s", p)
 
-            df_nuevo = procesar_archivo_sii(str(p))
+            df_nuevo = ejecutar_archivo_excel(
+                str(p),
+                mover_procesados=config.ETL_MOVER_PROCESADOS,
+                usar_zona_trabajo=config.ETL_USAR_ZONA_TRABAJO,
+                ruta_work=config.ETL_RUTA_WORK,
+                ruta_procesados=config.ETL_RUTA_PROCESADOS,
+                ruta_error=config.ETL_RUTA_ERROR,
+            )
 
             # Si ya existe consolidado, anexamos y deduplicamos por id_reporte
             if csv_out.exists():
@@ -120,10 +140,27 @@ class DataManager:
         logger.info("Cargando insumo CSV: %s", csv_path)
         df = pd.read_csv(csv_path)
 
-        required = {"estado", "anio", "mes", "metrica", "valor", "linea", "producto"}
-        missing = required - set(df.columns)
-        if missing:
-            raise ValueError(f"Faltan columnas requeridas en el CSV: {sorted(missing)}")
+        validation = validate_consolidated_dataframe(
+            df,
+            required_years=[config.ANIO_ANALISIS, config.ANIO_PREVIO, config.ANIO_OBJETIVO],
+            valid_states=config.ESTADOS_MX.keys(),
+            valid_metrics=[config.MET_MONTO, config.MET_NUM],
+            require_unique_id=False,
+        )
+        for message in format_validation_messages(validation):
+            if message.startswith("ERROR"):
+                logger.error(message)
+            else:
+                logger.warning(message)
+        if not validation.ok:
+            raise ValueError("El CSV no cumple el contrato de datos requerido.")
+
+        for warning in temporal_comparability_warnings(
+            df,
+            current_year=config.ANIO_ANALISIS,
+            previous_year=config.ANIO_PREVIO,
+        ):
+            logger.warning(warning)
 
         # Tipos
         df["anio"] = pd.to_numeric(df["anio"], errors="coerce").fillna(0).astype(int)

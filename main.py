@@ -9,6 +9,7 @@ import logging
 import yaml
 import warnings
 import pandas as pd
+from datetime import datetime
 from pathlib import Path
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
@@ -18,13 +19,33 @@ import config
 import etl
 import viz
 from migrate_csv_to_pg import migrate
+from database import health_check
 
-# Configuración de logs
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%H:%M:%S'
-)
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+LOG_DATE_FORMAT = "%H:%M:%S"
+
+
+def configurar_logging(log_file=None):
+    """Configura logging para consola y, opcionalmente, archivo por corrida."""
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+
+    formatter = logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+
+configurar_logging()
 logger = logging.getLogger(__name__)
 
 # Ignorar advertencias no críticas
@@ -40,22 +61,45 @@ def cargar_configuracion_yaml():
     with open(ruta_yaml, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
-    logger.info("Cargando configuración...")
-
     # Inyección de variables
     config.ANIO_ANALISIS = data["tiempo"]["anio_analisis"]
     config.ANIO_OBJETIVO = data["tiempo"]["anio_objetivo"]
     config.ANIO_PREVIO = data["tiempo"]["anio_previo"]
+    config.ANIO_HISTORICO_INICIO = data["tiempo"]["anio_historico_inicio"]
     config.FECHA_INICIO_ANIO_ANALISIS = f"{config.ANIO_ANALISIS}-01-01"
-    config.FECHA_INICIO_FILTROS = f"{data['tiempo']['anio_historico_inicio']}-01-01"
+    config.FECHA_INICIO_FILTROS = f"{config.ANIO_HISTORICO_INICIO}-01-01"
 
     config.FILE_INPUT = data["rutas"]["archivo_entrada"]
     config.OUTDIR = Path(data["rutas"]["carpeta_salida"])
     config.PDF_NAME_PREFIX = data["rutas"]["nombre_pdf_prefijo"]
     config.OUTDIR.mkdir(parents=True, exist_ok=True)
 
+    logs_dir = Path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    config.LOG_FILE = logs_dir / f"reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    configurar_logging(config.LOG_FILE)
+    logger.info("Cargando configuración...")
+    logger.info("Log de ejecucion: %s", config.LOG_FILE)
+
     config.MET_MONTO = data["metricas"]["col_monto"]
     config.MET_NUM = data["metricas"]["col_num"]
+
+    database_conf = data.get("database", {})
+    config.DATABASE_ENABLED = bool(database_conf.get("enabled", True))
+    config.DATABASE_FAIL_ON_ERROR = bool(database_conf.get("fail_on_error", False))
+    config.DATABASE_HEALTH_CHECK = bool(database_conf.get("health_check", True))
+
+    etl_conf = data.get("etl", {})
+    config.ETL_MOVER_PROCESADOS = bool(etl_conf.get("mover_procesados", False))
+    config.ETL_USAR_ZONA_TRABAJO = bool(etl_conf.get("usar_zona_trabajo", True))
+    config.ETL_RUTA_WORK = etl_conf.get("ruta_work", "datos_work")
+    config.ETL_RUTA_PROCESADOS = etl_conf.get("ruta_procesados", "datos_procesados")
+    config.ETL_RUTA_ERROR = etl_conf.get("ruta_error", "datos_error")
+    for etl_dir in (config.ETL_RUTA_WORK, config.ETL_RUTA_PROCESADOS, config.ETL_RUTA_ERROR):
+        Path(etl_dir).mkdir(parents=True, exist_ok=True)
+
+    pdf_conf = data.get("pdf", {})
+    config.PDF_FIGURE_SCALE = float(pdf_conf.get("figure_scale", 0.78))
 
     estilos = data["estilos"]
     config.COLOR_INFONAVIT = estilos["color_corporativo"]
@@ -81,12 +125,31 @@ def main():
         return
 
     # 3. Sincronización PostgreSQL
-    logger.info("Sincronizando histórico consolidado con PostgreSQL...")
-    input_path = Path(str(config.FILE_INPUT))
-    csv_path = input_path if input_path.suffix.lower() == ".csv" else Path("SII_concentrado_v3.csv")
-    if not migrate(csv_path=str(csv_path)):
-        logger.error("Error en sincronización PostgreSQL. El reporte no será generado.")
-        return
+    if config.DATABASE_ENABLED:
+        logger.info("Sincronizando histórico consolidado con PostgreSQL...")
+        input_path = Path(str(config.FILE_INPUT))
+        csv_path = input_path if input_path.suffix.lower() == ".csv" else Path("SII_concentrado_v3.csv")
+
+        db_available = True
+        if config.DATABASE_HEALTH_CHECK:
+            db_available, db_message = health_check()
+            if db_available:
+                logger.info(db_message)
+            else:
+                logger.error(db_message)
+
+        migration_ok = False
+        if db_available:
+            migration_ok = migrate(csv_path=str(csv_path))
+
+        if not migration_ok:
+            msg = "Error en sincronización PostgreSQL."
+            if config.DATABASE_FAIL_ON_ERROR:
+                logger.error("%s El reporte no será generado.", msg)
+                return
+            logger.warning("%s Se continuará con la generación del PDF.", msg)
+    else:
+        logger.info("Sincronización PostgreSQL deshabilitada por configuración.")
 
     # 4. PDF Global
     nombre_pdf = f"{config.PDF_NAME_PREFIX}_{config.ANIO_ANALISIS}.pdf"
@@ -124,7 +187,8 @@ def main():
         viz.plot_06_crecimiento_yoy(manager.df_global)
 
         # 09: Carrera Anual (Acumulados)
-        viz.plot_09_carrera_anual(manager.df_global, [config.ANIO_PREVIO, config.ANIO_ANALISIS, config.ANIO_OBJETIVO])
+        anios_carrera = list(range(config.ANIO_HISTORICO_INICIO, config.ANIO_OBJETIVO + 1))
+        viz.plot_09_carrera_anual(manager.df_global, anios_carrera)
 
         # 13: Share Stacked
         viz.plot_13_share(manager.df_raw_monto)

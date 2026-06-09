@@ -424,9 +424,20 @@ def plot_24_yoy_por_linea(df_master, anio):
     - Homologación de colores corporativos.
     - Mejora de espaciado en etiquetas.
     """
-    # 1. Preparación de Datos y Filtro de Años
-    anios = [anio, anio - 1]
-    df = df_master[df_master["fecha"].dt.year.isin(anios)].copy()
+    # 1. Preparación de Datos y Filtro de Años comparables
+    anio_previo = anio - 1
+    meses_actuales = sorted(
+        df_master.loc[df_master["fecha"].dt.year == anio, "fecha"].dt.month.unique()
+    )
+    if not meses_actuales:
+        return
+
+    mes_corte = int(max(meses_actuales))
+    meses_comparables = list(range(1, mes_corte + 1))
+    df = df_master[
+        (df_master["fecha"].dt.year.isin([anio_previo, anio]))
+        & (df_master["fecha"].dt.month.isin(meses_comparables))
+    ].copy()
     
     # Mapeo de Nombres Cortos (Mismo diccionario de plot_14 y plot_21)
     mapa_corto = {
@@ -445,7 +456,12 @@ def plot_24_yoy_por_linea(df_master, anio):
 
     # 2. Agrupación y Cálculo de Variación
     grp = df.groupby([df["fecha"].dt.year, "nombre_visual"])["Monto"].sum().unstack(level=0).fillna(0)
-    grp.columns = ["Prev", "Curr"]
+    if anio_previo not in grp.columns:
+        grp[anio_previo] = 0
+    if anio not in grp.columns:
+        grp[anio] = 0
+    grp = grp.rename(columns={anio_previo: "Prev", anio: "Curr"})
+    grp = grp[["Prev", "Curr"]]
     
     # Solo líneas con datos en ambos años para evitar infinitos
     grp = grp[grp["Prev"] > 0].copy()
@@ -477,28 +493,42 @@ def plot_24_yoy_por_linea(df_master, anio):
         monto_actual = row["Curr"]
         
         # Posicionamiento dinámico de la etiqueta
-        padding = 2 if valor_pct >= 0 else -2
-        ha = 'left' if valor_pct >= 0 else 'right'
+        if valor_pct >= 0:
+            x_label = bar.get_width() + 2
+            ha = 'left'
+            label_color = "#333333"
+        elif valor_pct <= -35:
+            x_label = bar.get_width() + 3
+            ha = 'left'
+            label_color = "white"
+        else:
+            x_label = bar.get_width() - 2
+            ha = 'right'
+            label_color = "#333333"
         
         etiqueta = f"+{valor_pct:.1f}%  ({human_format(monto_actual)})" if valor_pct >= 0 else f"{valor_pct:.1f}%  ({human_format(monto_actual)})"
         
         ax.text(
-            bar.get_width() + padding, 
+            x_label, 
             bar.get_y() + bar.get_height()/2, 
             etiqueta,
             va='center', ha=ha, 
-            fontsize=11, fontweight='bold', color="#333333"
+            fontsize=11, fontweight='bold', color=label_color
         )
 
     # 6. Estética Final
     ax.set_title(f"Variación Anual (YoY) por Línea: {anio}", loc='left', fontsize=18, fontweight="bold", color="#333333", pad=20)
-    ax.set_xlabel("Crecimiento vs Año Anterior (%)", fontweight="bold", color="gray", fontsize=12)
+    meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    ventana_label = f"{meses_es[0]}-{meses_es[mes_corte - 1]}"
+    ax.set_xlabel("Crecimiento vs Año Anterior (%) - YTD comparable", fontweight="bold", color="gray", fontsize=12)
     
     # Formato de porcentaje en eje X
     ax.xaxis.set_major_formatter(mtick.PercentFormatter())
     
-    # Ajustar límite derecho para que quepan las etiquetas
-    ax.set_xlim(right=grp["YoY"].max() * 1.25)
+    # Ajustar límites para que quepan etiquetas positivas y negativas
+    min_yoy = grp["YoY"].min()
+    max_yoy = grp["YoY"].max()
+    ax.set_xlim(left=min(min_yoy * 1.15, -10), right=max(max_yoy * 1.25, 10))
 
     # Limpieza de spines
     ax.spines['top'].set_visible(False)
@@ -508,7 +538,7 @@ def plot_24_yoy_por_linea(df_master, anio):
     
     ax.grid(True, axis='x', linestyle='--', alpha=0.4, color='gray', zorder=0)
 
-    plt.figtext(0.01, 0.01, "Nota: El valor entre paréntesis indica el Monto Colocado en el año actual. | Se excluyen líneas de emergencia por distorsión de escala.", 
+    plt.figtext(0.01, 0.01, f"Nota: Comparación YTD comparable {ventana_label} {anio} vs {ventana_label} {anio_previo}. El valor entre paréntesis indica el Monto Colocado en el año actual. | Se excluyen líneas de emergencia por distorsión de escala.", 
                 fontsize=9, color="gray", style="italic")
     
     plt.tight_layout()
@@ -714,4 +744,3 @@ def plot_generico_share(grp, anio, linea_nombre, num_grafica=None):
 def plot_generico_ticket(grp, anio, linea_nombre, num_grafica=None):
     safe = re.sub(r"[^a-zA-Z0-9_\-]", "", linea_nombre.replace(":", "").replace(" ", "_"))
     _helper_barra_simple_ticket(grp, "producto", "Ticket", f"{linea_nombre} Ticket ({anio})", f"{num_grafica}_{safe}.png")
-

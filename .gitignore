@@ -1,33 +1,96 @@
-# Environments
-.env
-.venv/
-env/
-venv/
-
-# Python Byte-compiled
+# =========================
+# Python / entorno local
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# IDEs
-.vscode/
-.idea/
+.venv/
+venv/
+env/
+ENV/
 
-# OS generated files
-.DS_Store
-Thumbs.db
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Datos de entrada brutos (ignoramos su contenido pero conservamos la carpeta)
+# =========================
+# Variables de entorno / secretos
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs y manifiestos de ejecucion
+# =========================
+logs/*
+!logs/.gitkeep
+!logs/runs/
+logs/runs/*
+!logs/runs/.gitkeep
+
+*.log
+
+# =========================
+# Zonas operativas del ETL
+# =========================
+datos_work/*
+!datos_work/.gitkeep
+
+datos_error/*
+!datos_error/.gitkeep
+
+datos_procesados/*
+!datos_procesados/.gitkeep
+
+# =========================
+# Entrada de datos productivos
+# =========================
+# Si datos_entrada contiene archivos reales/productivos, ignorar su contenido.
 datos_entrada/*
 !datos_entrada/.gitkeep
+!datos_entrada/README.md
 
-# Salidas de visualización (ignoramos PDFs y PNGs)
-salidas_viz_final/*
-!salidas_viz_final/.gitkeep
+# =========================
+# Datos consolidados / salidas generadas
+# =========================
+*.csv
+*.xlsx
+*.xls
 
-# Respaldos
+# Carpeta permitida para muestras pequenas/controladas
+!data_samples/
+!data_samples/**
+
+salidas_viz_final/
+outputs/
+output/
+reports/
+reportes/
+
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
 respaldo/*
 !respaldo/.gitkeep
 
-# Logs
-*.log
+# =========================
+# Backups y temporales
+# =========================
+*.bak
+*.tmp
+*.temp
+~$*
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / sistema operativo
+# =========================
+.vscode/
+.idea/

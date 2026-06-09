@@ -531,6 +531,17 @@ def crear_portada_pdf():
     fig = plt.figure(figsize=(11, 8.5))
     ax = fig.add_subplot(111); ax.axis("off")
     ax.text(0.5, 0.7, "REPORTE ESTRATÉGICO", ha="center", fontsize=30, fontweight="bold", color=config.COLOR_INFONAVIT)
-    ax.text(0.5, 0.5, f"INFONAVIT {config.ANIO_PREVIO}-{config.ANIO_OBJETIVO}", ha="center", fontsize=18)
+    anio_inicio = getattr(config, "ANIO_HISTORICO_INICIO", config.ANIO_PREVIO)
+    ax.text(0.5, 0.54, f"INFONAVIT {anio_inicio} - {config.ANIO_OBJETIVO}", ha="center", fontsize=18)
+    ax.text(0.5, 0.42, "Autor: Edgar Trejo (@etrejoh)", ha="center", fontsize=12, color="#333333")
+    ax.text(
+        0.5,
+        0.34,
+        "El presente fue elaborado con datos del Sistema de Información Infonavit (SII) publicados en el portal www.portalmx.infonavit.org.mx",
+        ha="center",
+        fontsize=10,
+        color="#555555",
+        wrap=True,
+    )
     if getattr(config, "PDF_REPORT", None): config.PDF_REPORT.savefig(fig)
     plt.close()

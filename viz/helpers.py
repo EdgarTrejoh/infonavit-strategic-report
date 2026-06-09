@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import re
+import logging
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
@@ -12,6 +13,8 @@ import seaborn as sns
 import config
 import utils
 import etl
+
+logger = logging.getLogger(__name__)
 
 
 def _smart_label_positioner(ax, final_points, min_distance=2.0):
@@ -125,11 +128,35 @@ def savefig(name: str):
     fp = config.OUTDIR / name
     plt.tight_layout()
     plt.savefig(fp, dpi=300,bbox_inches="tight", pad_inches=0.3)
-    print(f"PNG Generado: {name}")
+    logger.info("PNG generado: %s", name)
 
     if getattr(config, "PDF_REPORT", None) is not None:
-        config.PDF_REPORT.savefig(bbox_inches="tight")
-        print("   └── Agregado al Reporte PDF")
+        img = plt.imread(fp)
+        img_h, img_w = img.shape[:2]
+        page_w, page_h = 11.0, 8.5
+        scale = max(0.1, min(float(getattr(config, "PDF_FIGURE_SCALE", 0.78)), 1.0))
+        max_w = page_w * scale
+        max_h = page_h * scale
+        img_ratio = img_w / img_h
+        box_ratio = max_w / max_h
+
+        if img_ratio >= box_ratio:
+            draw_w = max_w
+            draw_h = draw_w / img_ratio
+        else:
+            draw_h = max_h
+            draw_w = draw_h * img_ratio
+
+        left = (page_w - draw_w) / 2
+        bottom = (page_h - draw_h) / 2
+
+        pdf_fig = plt.figure(figsize=(page_w, page_h), facecolor="white")
+        ax_pdf = pdf_fig.add_axes([left / page_w, bottom / page_h, draw_w / page_w, draw_h / page_h])
+        ax_pdf.imshow(img)
+        ax_pdf.axis("off")
+        config.PDF_REPORT.savefig(pdf_fig)
+        plt.close(pdf_fig)
+        logger.info("Agregado al Reporte PDF: %s", name)
     plt.close()
 
 def human_format(x, pos=None):
@@ -167,7 +194,7 @@ def _helper_doble_eje_barras(df, x_col, y1_col, y2_col, titulo, archivo_salida,
         color1 = config.COLOR_INFONAVIT
         
     if df.empty:
-        print(f"⚠️ Dataframe vacío para: {titulo}")
+        logger.warning("Dataframe vacio para: %s", titulo)
         return
 
     # Aumentamos el tamaño de la figura para que respire

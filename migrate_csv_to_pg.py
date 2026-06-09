@@ -1,46 +1,51 @@
 import pandas as pd
+import logging
 from sqlalchemy import inspect, text
+from contract_validator import format_validation_messages, validate_consolidated_dataframe
 from database import engine
 
+logger = logging.getLogger(__name__)
+
+
 def migrate(csv_path="SII_concentrado_v3.csv"):
-    print("Iniciando migración de CSV a PostgreSQL...")
+    logger.info("Iniciando migracion de CSV a PostgreSQL...")
     if engine is None:
-        print("❌ Error: No se pudo conectar a la base de datos.")
+        logger.error("No se pudo conectar a la base de datos.")
         return False
 
     table_name = "infonavit_historico"
 
     try:
-        print(f"Leyendo archivo {csv_path} (puede tardar un momento)...")
+        logger.info("Leyendo archivo %s (puede tardar un momento)...", csv_path)
         df = pd.read_csv(csv_path)
         total_filas_csv = len(df)
-        print(f"Total de filas leídas del CSV: {total_filas_csv}")
-        
-        if "id_reporte" not in df.columns:
-            print("❌ Error: El CSV no contiene la columna obligatoria 'id_reporte'.")
-            return False
+        logger.info("Total de filas leidas del CSV: %s", total_filas_csv)
 
-        ids_vacios = df["id_reporte"].isna() | (df["id_reporte"].astype(str).str.strip() == "")
-        if ids_vacios.any():
-            print(f"❌ Error: El CSV contiene {ids_vacios.sum()} registros sin 'id_reporte'.")
+        validation = validate_consolidated_dataframe(df, require_unique_id=False)
+        for message in format_validation_messages(validation):
+            if message.startswith("ERROR"):
+                logger.error(message)
+            else:
+                logger.warning(message)
+        if not validation.ok:
             return False
 
         duplicados_csv = df.duplicated(subset=["id_reporte"], keep="last").sum()
         total_ids_unicos = df["id_reporte"].nunique()
-        print(f"Total de 'id_reporte' únicos: {total_ids_unicos}")
-        print(f"Total de duplicados detectados en el CSV: {duplicados_csv}")
+        logger.info("Total de 'id_reporte' unicos: %s", total_ids_unicos)
+        logger.info("Total de duplicados detectados en el CSV: %s", duplicados_csv)
         if duplicados_csv:
-            print(
-                f"⚠️ Se detectaron {duplicados_csv} registros duplicados en el CSV. "
-                "Se conservará la versión más reciente de cada 'id_reporte'."
+            logger.warning(
+                "Se detectaron %s registros duplicados en el CSV. "
+                "Se conservara la version mas reciente de cada 'id_reporte'.",
+                duplicados_csv,
             )
             df = df.drop_duplicates(subset=["id_reporte"], keep="last").copy()
 
-        # Opcional: asegurarnos de que la columna fecha tenga formato datetime
-        if 'fecha' in df.columns:
-            df['fecha'] = pd.to_datetime(df['fecha'])
-            
-        print(f"Total de registros únicos a sincronizar: {len(df)}")
+        if "fecha" in df.columns:
+            df["fecha"] = pd.to_datetime(df["fecha"])
+
+        logger.info("Total de registros unicos a sincronizar: %s", len(df))
 
         quote = engine.dialect.identifier_preparer.quote
         quoted_table = quote(table_name)
@@ -54,12 +59,12 @@ def migrate(csv_path="SII_concentrado_v3.csv"):
             table_exists = inspect(connection).has_table(table_name)
 
             if not table_exists:
-                print(f"La tabla destino '{table_name}' no existe. Creando su estructura inicial...")
+                logger.info("La tabla destino '%s' no existe. Creando su estructura inicial...", table_name)
                 df.head(0).to_sql(table_name, connection, if_exists="fail", index=False)
             else:
-                print(
-                    f"La tabla destino '{table_name}' ya existe. "
-                    "Se conservará sin eliminarla ni recrearla."
+                logger.info(
+                    "La tabla destino '%s' ya existe. Se conservara sin eliminarla ni recrearla.",
+                    table_name,
                 )
                 columnas_tabla = {col["name"] for col in inspect(connection).get_columns(table_name)}
                 columnas_faltantes = set(df.columns) - columnas_tabla
@@ -69,8 +74,8 @@ def migrate(csv_path="SII_concentrado_v3.csv"):
                         f"{sorted(columnas_faltantes)}"
                     )
 
-            # Si existen duplicados históricos, PostgreSQL detendrá aquí la carga
-            # sin borrar registros para que puedan revisarse de forma explícita.
+            # Si existen duplicados historicos, PostgreSQL detendra aqui la carga
+            # sin borrar registros para que puedan revisarse de forma explicita.
             connection.execute(
                 text(
                     f"CREATE UNIQUE INDEX IF NOT EXISTS {quoted_index} "
@@ -99,28 +104,30 @@ def migrate(csv_path="SII_concentrado_v3.csv"):
                 )
             )
 
-        print(
-            f"✅ Sincronización exitosa. {len(df)} registros procesados en "
-            f"la tabla '{table_name}' sin reemplazarla."
+        logger.info(
+            "OK: Sincronizacion exitosa. %s registros procesados en la tabla '%s' sin reemplazarla.",
+            len(df),
+            table_name,
         )
-        print("✅ Proceso completado dentro de una transacción.")
-        print("✅ La tabla final no fue eliminada ni recreada durante la sincronización.")
-        print("Validación recomendada en PostgreSQL:")
-        print(
-            f"SELECT COUNT(*) AS filas_totales, "
-            f"COUNT(DISTINCT id_reporte) AS ids_unicos FROM {table_name};"
+        logger.info("OK: Proceso completado dentro de una transaccion.")
+        logger.info("OK: La tabla final no fue eliminada ni recreada durante la sincronizacion.")
+        logger.info("Validacion recomendada en PostgreSQL:")
+        logger.info(
+            "SELECT COUNT(*) AS filas_totales, COUNT(DISTINCT id_reporte) AS ids_unicos FROM %s;",
+            table_name,
         )
-        print(
-            f"SELECT id_reporte, COUNT(*) FROM {table_name} "
-            "GROUP BY id_reporte HAVING COUNT(*) > 1;"
+        logger.info(
+            "SELECT id_reporte, COUNT(*) FROM %s GROUP BY id_reporte HAVING COUNT(*) > 1;",
+            table_name,
         )
         return True
     except FileNotFoundError:
-        print(f"❌ Error: El archivo {csv_path} no fue encontrado.")
+        logger.error("El archivo %s no fue encontrado.", csv_path)
         return False
     except Exception as e:
-        print(f"❌ Error durante la migración: {e}")
+        logger.exception("Error durante la migracion: %s", e)
         return False
+
 
 if __name__ == "__main__":
     migrate()

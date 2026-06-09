@@ -4,16 +4,31 @@
 # ==========================================
 
 tiempo:
-  anio_analisis: 2024         # Año principal (Current Year)
-  anio_objetivo: 2025         # Año meta/proyección
-  anio_previo: 2023           # Año anterior (para comparación YoY)
-  anio_historico_inicio: 2022 # Inicio de las series de tiempo
+  anio_analisis: 2026         # Año principal (Current Year)
+  anio_objetivo: 2026         # Año meta/proyección
+  anio_previo: 2025         # Año anterior (para comparación YoY)
+  anio_historico_inicio: 2024 # Inicio de las series de tiempo
 
 rutas:
   # Carpeta donde se depositan los Excels nuevos cada mes
   archivo_entrada: "datos_entrada"
   carpeta_salida: "salidas_viz_final"
   nombre_pdf_prefijo: "Reporte_Estrategico_INFONAVIT"
+
+database:
+  enabled: true
+  fail_on_error: false
+  health_check: true
+
+etl:
+  mover_procesados: false
+  usar_zona_trabajo: true
+  ruta_work: datos_work
+  ruta_procesados: datos_procesados
+  ruta_error: datos_error
+
+pdf:
+  figure_scale: 0.84
 
 metricas:
   col_monto: "Monto de crédito Infonavit"

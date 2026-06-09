@@ -19,17 +19,32 @@ FILE_INPUT = "SII_concentrado_v3.csv"
 OUTDIR = Path("salidas_viz_final")
 PDF_NAME_PREFIX = "Reporte"
 PDF_REPORT = None  # Aquí se guardará el objeto PDFPages
+PDF_FIGURE_SCALE = 0.78
+LOG_FILE = None
 
 # 2. Configuración de Tiempo (Valores por defecto)
 ANIO_ANALISIS = 2024
 ANIO_OBJETIVO = 2025
 ANIO_PREVIO = 2023
+ANIO_HISTORICO_INICIO = 2022
 FECHA_INICIO_ANIO_ANALISIS = "2024-01-01"
 FECHA_INICIO_FILTROS = "2022-01-01"
 
 # 3. Métricas
 MET_MONTO = "Monto de crédito Infonavit"
 MET_NUM = "Número de créditos formalizados"
+
+# 3.1 Base de datos
+DATABASE_ENABLED = True
+DATABASE_FAIL_ON_ERROR = False
+DATABASE_HEALTH_CHECK = True
+
+# 3.2 ETL e insumos
+ETL_MOVER_PROCESADOS = False
+ETL_USAR_ZONA_TRABAJO = True
+ETL_RUTA_WORK = "datos_work"
+ETL_RUTA_PROCESADOS = "datos_procesados"
+ETL_RUTA_ERROR = "datos_error"
 
 # 4. Colores y Estilos (Mapeo doble para compatibilidad)
 # Definimos tanto MAYÚSCULAS (estándar Python) como minúsculas (según tu error)

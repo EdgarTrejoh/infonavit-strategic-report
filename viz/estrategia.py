@@ -521,8 +521,19 @@ def plot_22_reporte_ejecutivo(df_master, anio):
     Transforma datos complejos en una tabla visual de fácil lectura.
     """
     # 1. Preparación de Datos
-    anios = [anio, anio - 1]
-    df = df_master[df_master["fecha"].dt.year.isin(anios)].copy()
+    anio_previo = anio - 1
+    meses_actuales = sorted(
+        df_master.loc[df_master["fecha"].dt.year == anio, "fecha"].dt.month.unique()
+    )
+    if not meses_actuales:
+        return
+
+    mes_corte = int(max(meses_actuales))
+    meses_comparables = list(range(1, mes_corte + 1))
+    df = df_master[
+        (df_master["fecha"].dt.year.isin([anio_previo, anio]))
+        & (df_master["fecha"].dt.month.isin(meses_comparables))
+    ].copy()
     
     # Agrupar por Línea (Nombres cortos)
     mapa_corto = {
@@ -535,11 +546,20 @@ def plot_22_reporte_ejecutivo(df_master, anio):
     df["Producto"] = df["linea"].map(lambda x: mapa_corto.get(x, "Otros"))
     
     resumen = df.groupby([df["fecha"].dt.year, "Producto"])["Monto"].sum().unstack(level=0).fillna(0)
-    resumen.columns = ["Previo", "Actual"]
+    if anio_previo not in resumen.columns:
+        resumen[anio_previo] = 0
+    if anio not in resumen.columns:
+        resumen[anio] = 0
+    resumen = resumen.rename(columns={anio_previo: "Previo", anio: "Actual"})
+    resumen = resumen[["Previo", "Actual"]]
     
     # Cálculos clave
     resumen["Var_Abs"] = resumen["Actual"] - resumen["Previo"]
-    resumen["Var_Pct"] = (resumen["Actual"] / resumen["Previo"] - 1) * 100
+    resumen["Var_Pct"] = np.where(
+        resumen["Previo"] > 0,
+        (resumen["Actual"] / resumen["Previo"] - 1) * 100,
+        0,
+    )
     resumen["Share"] = (resumen["Actual"] / resumen["Actual"].sum()) * 100
     resumen = resumen.sort_values("Actual", ascending=False)
 
@@ -581,8 +601,16 @@ def plot_22_reporte_ejecutivo(df_master, anio):
         ax.add_patch(plt.Rectangle((col_x[3]-0.05, y_pos-0.03), 0.1 * (share_val/100), 0.01, color="#BC955C"))
 
     # 4. Título y Notas
-    plt.suptitle(f"Resumen Ejecutido de Colocación ({anio})", fontsize=15, fontweight="bold", y=0.98)
-    plt.figtext(0.5, 0.05, f"Total Colocado: ${human_format(resumen['Actual'].sum())} | Variación Total: {((resumen['Actual'].sum()/resumen['Previo'].sum())-1)*100:+.1f}%", 
+    total_actual = resumen["Actual"].sum()
+    total_previo = resumen["Previo"].sum()
+    variacion_total = ((total_actual / total_previo) - 1) * 100 if total_previo > 0 else 0
+    meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    ventana_label = f"{meses_es[0]}-{meses_es[mes_corte - 1]}"
+
+    plt.suptitle(f"Resumen Ejecutivo de Colocación ({anio})", fontsize=15, fontweight="bold", y=0.98)
+    plt.figtext(0.5, 0.11, f"Comparación YTD comparable: {ventana_label} {anio} vs {ventana_label} {anio_previo}",
+                ha="center", fontsize=9, color="gray", style="italic")
+    plt.figtext(0.5, 0.045, f"Total Colocado: ${human_format(total_actual)} | Variación Total: {variacion_total:+.1f}%", 
                 ha="center", fontsize=12, fontweight="bold", bbox=dict(boxstyle="round,pad=0.5", fc="#f5f5f5", ec="#dddddd"))
 
     plt.tight_layout()
@@ -593,8 +621,22 @@ def plot_40_cagr_productos(df_master, anio_fin, periodo=3):
     40. CAGR por Producto - VERSIÓN LIMPIA (Sin Otros/Emergencia)
     Filtra productos con poco historial o ruido estadístico.
     """
-    anio_ini = anio_fin - periodo
-    df = df_master[df_master["fecha"].dt.year.isin([anio_ini, anio_fin])].copy()
+    anio_ini = anio_fin - (periodo - 1)
+    anios_periodo = list(range(anio_ini, anio_fin + 1))
+    periodos_cagr = max(anio_fin - anio_ini, 1)
+
+    meses_actuales = sorted(
+        df_master.loc[df_master["fecha"].dt.year == anio_fin, "fecha"].dt.month.unique()
+    )
+    if not meses_actuales:
+        return
+
+    mes_corte = int(max(meses_actuales))
+    meses_comparables = list(range(1, mes_corte + 1))
+    df = df_master[
+        (df_master["fecha"].dt.year.isin(anios_periodo))
+        & (df_master["fecha"].dt.month.isin(meses_comparables))
+    ].copy()
     
     mapa_corto = {
         "Línea II: Adquisición de vivienda existente": "L2 Existente",
@@ -612,8 +654,12 @@ def plot_40_cagr_productos(df_master, anio_fin, periodo=3):
     if anio_ini not in data.index or anio_fin not in data.index: return
 
     # Cálculo CAGR
-    cagr = ((data.loc[anio_fin] / data.loc[anio_ini]) ** (1/periodo)) - 1
+    base = data.loc[anio_ini].replace(0, np.nan)
+    cagr = ((data.loc[anio_fin] / base) ** (1 / periodos_cagr)) - 1
     cagr = (cagr * 100).sort_values(ascending=True)
+    cagr = cagr.dropna()
+    if cagr.empty:
+        return
 
     fig, ax = plt.subplots(figsize=(12, 7))
     
@@ -631,18 +677,45 @@ def plot_40_cagr_productos(df_master, anio_fin, periodo=3):
     ax.axvline(benchmark, color='#d32f2f', linestyle='--', alpha=0.6, label=f"Benchmark ({benchmark}%)")
     ax.axvline(0, color='black', linewidth=1)
 
+    min_cagr = cagr.min()
+    max_cagr = cagr.max()
+    ax.set_xlim(left=min(min_cagr * 1.10, -10), right=max(max_cagr * 1.15, 10))
+
     for bar in bars:
         w = bar.get_width()
-        ax.annotate(f"{w:+.1f}%", xy=(w, bar.get_y() + bar.get_height()/2),
-                    xytext=(5 if w>0 else -5, 0), textcoords="offset points",
-                    ha='left' if w>0 else 'right', va='center', fontweight='bold', fontsize=11)
+        if w >= 0:
+            x_label = w + 1
+            ha = "left"
+            label_color = "#333333"
+        elif w <= -35:
+            x_label = w + 2
+            ha = "left"
+            label_color = "white"
+        else:
+            x_label = w - 1
+            ha = "right"
+            label_color = "#333333"
+
+        ax.text(
+            x_label,
+            bar.get_y() + bar.get_height() / 2,
+            f"{w:+.1f}%",
+            ha=ha,
+            va="center",
+            fontweight="bold",
+            fontsize=11,
+            color=label_color,
+        )
+
+    meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    ventana_label = f"{meses_es[0]}-{meses_es[mes_corte - 1]}"
 
     ax.set_title(f"CAGR por Línea de Negocio ({anio_ini}-{anio_fin})", loc="left", fontsize=15, fontweight="bold")
     ax.set_xlabel("Tasa de Crecimiento Anual Compuesta (%)", fontweight="bold", color="gray")
     ax.xaxis.set_major_formatter(mtick.PercentFormatter())
     ax.legend(loc="lower right", frameon=False)
     
-    plt.figtext(0.01, 0.01, f"Nota: Se excluyen productos con historial menor a {periodo} años para evitar ruido estadístico.", 
+    plt.figtext(0.01, 0.01, f"Nota: Comparación YTD comparable {ventana_label} para cada año del periodo. Se excluyen productos con historial menor a {periodo} años para evitar ruido estadístico.", 
                 fontsize=9, color="gray", style="italic")
     
     plt.tight_layout()
@@ -653,18 +726,40 @@ def plot_41_matriz_crecimiento_estados(df_master, anio_fin, periodo=3):
     41. Matriz de Oportunidad Estatal (CAGR vs Monto).
     AJUSTES: Colores corporativos, limpieza de etiquetas encimadas y diseño ejecutivo.
     """
-    anio_ini = anio_fin - periodo
-    df_periodo = df_master[df_master["fecha"].dt.year.isin([anio_ini, anio_fin])].copy()
+    anio_ini = anio_fin - (periodo - 1)
+    anios_periodo = list(range(anio_ini, anio_fin + 1))
+    periodos_cagr = max(anio_fin - anio_ini, 1)
+
+    meses_actuales = sorted(
+        df_master.loc[df_master["fecha"].dt.year == anio_fin, "fecha"].dt.month.unique()
+    )
+    if not meses_actuales:
+        return
+
+    mes_corte = int(max(meses_actuales))
+    meses_comparables = list(range(1, mes_corte + 1))
+    df_periodo = df_master[
+        (df_master["fecha"].dt.year.isin(anios_periodo))
+        & (df_master["fecha"].dt.month.isin(meses_comparables))
+    ].copy()
     
     stats = df_periodo.groupby([df_periodo["fecha"].dt.year, "nombre_estado"])["Monto"].sum().unstack(level=0)
-    stats.columns = ["Vi", "Vf"]
+    if anio_ini not in stats.columns or anio_fin not in stats.columns:
+        return
+
+    stats = stats[[anio_ini, anio_fin]]
+    stats = stats.rename(columns={anio_ini: "Vi", anio_fin: "Vf"})
     stats = stats.dropna()
 
-    stats["CAGR"] = (((stats["Vf"] / stats["Vi"]) ** (1/periodo)) - 1) * 100
+    stats = stats[stats["Vi"] > 0].copy()
+    stats["CAGR"] = (((stats["Vf"] / stats["Vi"]) ** (1 / periodos_cagr)) - 1) * 100
     stats["Monto_Actual"] = stats["Vf"]
     
     # Filtro de ruido para evitar distorsiones visuales
+    stats = stats[np.isfinite(stats["CAGR"])]
     stats = stats[stats["CAGR"] < 100]
+    if stats.empty:
+        return
 
     fig, ax = plt.subplots(figsize=(14, 10))
     
@@ -728,7 +823,7 @@ def plot_41_matriz_crecimiento_estados(df_master, anio_fin, periodo=3):
                  loc="left", fontsize=15, fontweight="bold", color="#333333", pad=30)
     
     ax.set_xlabel(f"Tasa de Crecimiento Anual Compuesta (CAGR %)", fontsize=12, fontweight="bold", labelpad=15)
-    ax.set_ylabel("Monto Colocado Anual ($)", fontsize=12, fontweight="bold", labelpad=15)
+    ax.set_ylabel("Monto Colocado YTD ($)", fontsize=12, fontweight="bold", labelpad=15)
     
     ax.yaxis.set_major_formatter(formatter_human)
     ax.xaxis.set_major_formatter(mtick.PercentFormatter(decimals=0))
@@ -743,7 +838,9 @@ def plot_41_matriz_crecimiento_estados(df_master, anio_fin, periodo=3):
     ax.spines['right'].set_visible(False)
     ax.grid(True, linestyle='--', alpha=0.2, color='gray')
 
-    plt.figtext(0.01, 0.01, f"Nota: Tamaño de burbuja proporcional al monto actual. | Mediana CAGR: {med_cagr:.1f}%", 
+    meses_es = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    ventana_label = f"{meses_es[0]}-{meses_es[mes_corte - 1]}"
+    plt.figtext(0.01, 0.01, f"Nota: Comparación YTD comparable {ventana_label} para cada año del periodo. Tamaño de burbuja proporcional al monto actual. | Mediana CAGR: {med_cagr:.1f}%", 
                 fontsize=9, color="gray", style="italic")
 
     plt.tight_layout()
@@ -763,5 +860,3 @@ def plot_99_resumen_ejecutivo(df_master, df_global, anio_objetivo):
     if getattr(config, "PDF_REPORT", None): config.PDF_REPORT.savefig(fig)
     plt.close()
     savefig("99_resumen_ejecutivo.png")
-
-
