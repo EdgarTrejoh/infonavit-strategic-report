@@ -808,8 +808,35 @@ Ordenar artefactos y documentacion sin realizar una reorganizacion amplia.
 
 - [ ] Pendiente
 - [ ] En proceso
-- [ ] Completado
-- [ ] Validado
+- [x] Completado
+- [x] Validado
+
+**Avance ejecutado**
+
+- Se agrego `pytest` como dependencia directa en `requirements.txt`.
+- Se creo suite minima en `tests/`.
+- Cobertura inicial:
+  - columnas obligatorias;
+  - `id_reporte` no nulo;
+  - `id_reporte` unico cuando se requiere;
+  - rango valido de `mes`;
+  - anios configurados existentes;
+  - advertencia por ventana temporal parcial;
+  - formato de mensajes de validacion;
+  - Excel invalido enviado a `datos_error/` y manifest;
+  - CSV en carpeta de entrada marcado como `skipped`.
+- Pruebas ejecutadas:
+
+```text
+python -m pytest -q
+9 passed, 1 warning
+```
+
+**Pendientes**
+
+- Agregar fixture de Excel valido minimo para probar procesamiento exitoso real.
+- Agregar smoke test de una grafica principal.
+- Agregar prueba opcional de integracion PostgreSQL.
 
 ### Etapa 7 - Pruebas automatizadas minimas
 
@@ -977,11 +1004,12 @@ Registrar mejoras utiles como backlog, sin ejecutarlas como trabajo inmediato.
 
 ### Pruebas
 
-- [ ] pytest propuesto
-- [ ] pruebas minimas listadas
-- [ ] pruebas unitarias separadas de integracion
+- [x] pytest propuesto
+- [x] pruebas minimas listadas
+- [x] pruebas unitarias separadas de integracion
 - [ ] smoke test de visualizaciones definido
-- [ ] prueba de ventana temporal comparable definida
+- [x] prueba de ventana temporal comparable definida
+- [x] pruebas de ETL operativo con error/skipped definidas
 
 ### Documentacion
 
