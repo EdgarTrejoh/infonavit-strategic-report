@@ -1215,6 +1215,9 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Desarrollo local definido: PostgreSQL local.
 - Futuro enterprise/GCP definido: Cloud SQL o BigQuery.
 - La IA no consumira datos crudos directamente; consumira JSON estructurado de `report_metrics.py` o vistas/tablas analiticas.
+- Supabase validado: `health_check` exitoso, tabla `infonavit_historico` disponible y conteos correctos.
+- Conteos Supabase validados: `filas_totales=109430`, `ids_unicos=109430`, `grupos_duplicados=0`.
+- Migrador manual protegido: requiere `python migrate_csv_to_pg.py --run --yes`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1230,11 +1233,6 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 ### Pendientes reales
 
 - Definir politica de manejo de errores: detener, advertir o continuar segun severidad.
-- Crear proyecto Supabase.
-- Configurar `DATABASE_URL` en `.env` local.
-- Probar `health_check` contra Supabase.
-- Ejecutar migracion controlada usando `python migrate_csv_to_pg.py --run --yes`.
-- Validar conteos post-migracion.
 - Definir vistas/tablas analiticas para mini reporte.
 - Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.
 - Definir si la ausencia de archivos `.xls` o `.xlsx` debe detener el proceso o solo advertir cuando ya existe CSV consolidado.
@@ -1264,13 +1262,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Preparacion productiva
 
-4. Preparar primer destino productivo en Supabase PostgreSQL:
-   - crear proyecto Supabase;
-   - configurar `DATABASE_URL` en `.env` local;
-   - probar `health_check`;
-   - ejecutar migracion controlada;
-   - validar conteos;
-   - definir vistas/tablas analiticas para mini reporte.
+4. Definir vistas/tablas analiticas para mini reporte sobre Supabase PostgreSQL.
 5. Evaluar CI basico para ejecutar:
 
 ```text

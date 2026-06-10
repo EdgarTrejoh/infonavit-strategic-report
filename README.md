@@ -422,13 +422,18 @@ Criterio para IA:
 - la IA no consumira datos crudos directamente;
 - la IA consumira JSON estructurado generado por `report_metrics.py` o vistas/tablas analiticas.
 
+Estado validado en Supabase:
+
+- `health_check` exitoso.
+- Tabla remota `infonavit_historico` disponible.
+- Conteo validado:
+  - `filas_totales`: 109430
+  - `ids_unicos`: 109430
+  - `grupos_duplicados`: 0
+- El migrador manual esta protegido: requiere `--run --yes` para ejecutar cambios.
+
 Antes de productivo, pendientes recomendados:
 
-- crear proyecto Supabase;
-- configurar `DATABASE_URL` en `.env` local;
-- probar `health_check`;
-- ejecutar migracion controlada;
-- validar conteos;
 - definir vistas/tablas analiticas para mini reporte;
 - ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
 - prueba opcional de integracion PostgreSQL;
