@@ -1209,6 +1209,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 - Version final de Python elegida: Python 3.11.
 - PostgreSQL es importante, pero no debe bloquear el PDF si `fail_on_error: false`.
+- CLI del migrador protegida: `python migrate_csv_to_pg.py --help` no ejecuta migracion; la carga manual requiere `--run --yes`.
 - `DATABASE_URL` ya quedo agregado como compatibilidad para servicios administrados.
 - Destino productivo inicial de datos definido: Supabase PostgreSQL.
 - Desarrollo local definido: PostgreSQL local.
@@ -1232,7 +1233,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Crear proyecto Supabase.
 - Configurar `DATABASE_URL` en `.env` local.
 - Probar `health_check` contra Supabase.
-- Ejecutar migracion controlada.
+- Ejecutar migracion controlada usando `python migrate_csv_to_pg.py --run --yes`.
 - Validar conteos post-migracion.
 - Definir vistas/tablas analiticas para mini reporte.
 - Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.

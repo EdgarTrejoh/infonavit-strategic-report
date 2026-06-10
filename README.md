@@ -225,6 +225,15 @@ Comportamiento:
 
 El migrador usa `id_reporte` para upsert incremental en `infonavit_historico`.
 
+Uso seguro del migrador manual:
+
+```powershell
+python migrate_csv_to_pg.py --help
+python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
+```
+
+Por seguridad, `python migrate_csv_to_pg.py` y `python migrate_csv_to_pg.py --help` no ejecutan migraciones. La carga real requiere confirmacion explicita con `--run --yes`.
+
 Validacion recomendada en PostgreSQL:
 
 ```sql

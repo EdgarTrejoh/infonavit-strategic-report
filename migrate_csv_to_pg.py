@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import logging
 from sqlalchemy import inspect, text
@@ -129,5 +130,46 @@ def migrate(csv_path="SII_concentrado_v3.csv"):
         return False
 
 
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Sincroniza el CSV consolidado con PostgreSQL. "
+            "Por seguridad, no ejecuta cambios sin --run --yes."
+        )
+    )
+    parser.add_argument(
+        "--csv-path",
+        default="SII_concentrado_v3.csv",
+        help="Ruta del CSV consolidado a sincronizar.",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Solicita ejecutar la migracion real.",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirma explicitamente que se autorizan cambios en la base configurada.",
+    )
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    if not args.run:
+        parser.print_help()
+        logger.warning("Migracion no ejecutada. Usa --run --yes para sincronizar PostgreSQL.")
+        return 2
+
+    if not args.yes:
+        logger.error("Migracion no ejecutada. Falta confirmacion explicita --yes.")
+        return 2
+
+    return 0 if migrate(csv_path=args.csv_path) else 1
+
+
 if __name__ == "__main__":
-    migrate()
+    raise SystemExit(main())
