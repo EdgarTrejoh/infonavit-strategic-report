@@ -20,6 +20,7 @@ import etl
 import viz
 from migrate_csv_to_pg import migrate
 from database import health_check
+from retention import apply_retention_policy
 
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LOG_DATE_FORMAT = "%H:%M:%S"
@@ -100,6 +101,20 @@ def cargar_configuracion_yaml():
 
     pdf_conf = data.get("pdf", {})
     config.PDF_FIGURE_SCALE = float(pdf_conf.get("figure_scale", 0.78))
+
+    retention_conf = data.get("retention", {})
+    config.RETENTION_ENABLED = bool(retention_conf.get("enabled", False))
+    config.RETENTION_DRY_RUN = bool(retention_conf.get("dry_run", True))
+    config.RETENTION_MAX_AGE_DAYS = retention_conf.get(
+        "max_age_days",
+        {
+            "datos_work": 7,
+            "datos_error": 30,
+            "datos_procesados": 90,
+            "logs": 30,
+            "manifests": 90,
+        },
+    )
 
     estilos = data["estilos"]
     config.COLOR_INFONAVIT = estilos["color_corporativo"]
@@ -306,8 +321,10 @@ def main():
         viz.plot_10_heatmap_ticket_mom(manager.df_master)
         viz.plot_10b_heatmap_ticket_nivel(manager.df_master)
 
-    logger.info(f"=== REPORTE COMPLETADO ===")
-    logger.info(f"PDF generado: {ruta_pdf}")
+        logger.info(f"=== REPORTE COMPLETADO ===")
+        logger.info(f"PDF generado: {ruta_pdf}")
+
+    apply_retention_policy()
 
 if __name__ == "__main__":
     main()

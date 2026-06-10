@@ -46,6 +46,17 @@ ETL_RUTA_WORK = "datos_work"
 ETL_RUTA_PROCESADOS = "datos_procesados"
 ETL_RUTA_ERROR = "datos_error"
 
+# 3.3 Retencion/limpieza operativa
+RETENTION_ENABLED = False
+RETENTION_DRY_RUN = True
+RETENTION_MAX_AGE_DAYS = {
+    "datos_work": 7,
+    "datos_error": 30,
+    "datos_procesados": 90,
+    "logs": 30,
+    "manifests": 90,
+}
+
 # 4. Colores y Estilos (Mapeo doble para compatibilidad)
 # Definimos tanto MAYÚSCULAS (estándar Python) como minúsculas (según tu error)
 COLOR_INFONAVIT = "#691C32"  # Vino default

@@ -16,7 +16,7 @@ rutas:
   nombre_pdf_prefijo: "Reporte_Estrategico_INFONAVIT"
 
 database:
-  enabled: true
+  enabled: false
   fail_on_error: false
   health_check: true
 
@@ -29,6 +29,16 @@ etl:
 
 pdf:
   figure_scale: 0.84
+
+retention:
+  enabled: false
+  dry_run: true
+  max_age_days:
+    datos_work: 7
+    datos_error: 30
+    datos_procesados: 90
+    logs: 30
+    manifests: 90
 
 metricas:
   col_monto: "Monto de crédito Infonavit"

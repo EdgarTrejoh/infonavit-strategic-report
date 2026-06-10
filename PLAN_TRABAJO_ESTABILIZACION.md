@@ -14,13 +14,12 @@ Este documento busca:
 - Permitir retomar el trabajo en el futuro sin perder contexto.
 - Separar trabajo inmediato de backlog tecnico.
 
-Alcance de este plan:
+Alcance original de este plan:
 
-- No modificar codigo en esta etapa documental.
 - No reorganizar toda la estructura del proyecto.
-- No cambiar visualizaciones.
-- No cambiar logica analitica.
 - No eliminar archivos sin confirmacion.
+
+Nota de estado: este documento ya no es solo un plan inicial; tambien funciona como bitacora de estabilizacion. Varias acciones ya fueron implementadas, validadas y confirmadas en commits.
 
 ## 2. Diagnostico resumido
 
@@ -39,7 +38,7 @@ Hallazgos principales detectados:
 - La validacion del contrato CSV es limitada.
 - La migracion a PostgreSQL requiere `id_reporte`.
 - Hay posible codificacion danada en documentacion.
-- No se observan pruebas automatizadas minimas.
+- Inicialmente no se observaban pruebas automatizadas minimas; actualmente existe suite base con `pytest`.
 - Existe un CSV consolidado grande en la raiz del proyecto.
 - La estructura es funcional, pero requiere mayor control operativo.
 
@@ -106,7 +105,7 @@ Ese estado ya fue superado: con el entorno virtual Python 3.11.9, `main.py` comp
 
 El pendiente operativo original de salida Unicode en consola Windows fue corregido en los mensajes operativos detectados. La ejecucion ya fue validada sin `PYTHONUTF8=1`.
 
-### Acciones recomendadas para entorno local Windows
+### Acciones historicas recomendadas para entorno local Windows
 
 Ejecutar manualmente desde PowerShell en la raiz del proyecto:
 
@@ -173,7 +172,7 @@ Ejecutar:
 python main.py
 ```
 
-### Restricciones
+### Restricciones historicas de ese diagnostico
 
 - No modificar `main.py`.
 - No tocar PostgreSQL.
@@ -192,11 +191,26 @@ python main.py
 - ETL ejecutado.
 - PostgreSQL sincronizado.
 - 41 PNG generados.
-- PDF generado: `Reporte_Estrategico_INFONAVIT_2025.pdf`.
+- PDF generado: `Reporte_Estrategico_INFONAVIT_2026.pdf`.
 - PDF revisado visualmente por el usuario y confirmado como correcto.
 - Etapa 2 validada con PDF generado sin `PYTHONUTF8=1`.
 - Modo DB no bloqueante validado: con PostgreSQL no disponible y `fail_on_error: false`, el PDF se genero.
 - Pendiente operativo original de salida Unicode en consola Windows corregido en mensajes operativos detectados.
+- README operativo actualizado y corregido en ASCII/UTF-8.
+- `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
+- `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
+- Tests minimos agregados y validados: `14 passed, 1 warning`.
+- Politica de retencion/limpieza operativa agregada en modo seguro:
+  - `retention.enabled: false`;
+  - `retention.dry_run: true`;
+  - no borra nada por defecto;
+  - excluye `.gitkeep`;
+  - no toca `datos_entrada/`, `.env`, `.venv/`, CSV consolidado ni salidas finales.
+- Commits recientes:
+  - `5f19fa1 chore: stabilize ETL pipeline and reporting workflow`
+  - `afb8b6b test: add validator and ETL operational coverage`
+  - `ab8bd1e chore: remove obsolete project state document`
+  - `3b727ac docs: update operational README`
 
 ## 4. Etapas priorizadas
 
@@ -622,7 +636,7 @@ Crear un validador reutilizable para asegurar que el CSV consolidado o dataset b
 - Ajuste visual PDF:
   - las graficas se insertan en el PDF sobre pagina carta horizontal fija;
   - se agrego escala configurable `pdf.figure_scale`;
-  - el valor inicial es `0.78` para dejar margenes visibles y evitar graficas pegadas a los bordes;
+  - el valor operativo actual es `0.84` para dejar margenes visibles y evitar graficas pegadas a los bordes;
   - los PNG individuales conservan su resolucion original.
 - Ajuste de portada PDF:
   - el rango de portada usa `anio_historico_inicio` y `anio_objetivo`;
@@ -748,13 +762,26 @@ logs/runs/run_YYYYMMDD_HHMMSS.json
 - PostgreSQL sincronizo correctamente.
 - Visualizaciones y PDF se generaron correctamente.
 - Manifest generado: `logs/runs/run_20260609_153835.json`.
+- Validacion manual con Excel real nuevo completada:
+  - archivo: `datos_entrada/SII_2013.xlsx`;
+  - manifest: `logs/runs/run_20260609_173357.json`;
+  - resultado: `status: ok`;
+  - se creo copia de trabajo en `datos_work/`;
+  - el archivo original permanecio en `datos_entrada/`;
+  - `destination: null` correcto con `etl.mover_procesados: false`.
+- Validacion automatizada con Excel sintetico valido completada:
+  - test: `test_valid_excel_uses_work_zone_and_manifest_ok`;
+  - crea un `.xlsx` minimo en `tmp_path`;
+  - valida copia a `datos_work/`;
+  - valida manifest con `status: ok`;
+  - valida que no haya copia a `datos_procesados/` cuando `mover_procesados: false`;
+  - valida que no haya archivo en `datos_error/`.
 
 **Pendientes**
 
-- Validar comportamiento `ok` con un Excel real nuevo en `datos_entrada/`.
 - Validar comportamiento `error` con fixture controlado de Excel invalido.
-- Definir politica de retencion/limpieza para `datos_work/`, `datos_procesados/`, `datos_error/` y `logs/runs/`.
 - Evaluar si los manifests JSON deben ignorarse en Git junto con logs operativos.
+- Pendiente opcional: ampliar el fixture sintetico para cubrir multiples meses/productos.
 
 **Estado**
 
@@ -771,25 +798,23 @@ Ordenar artefactos y documentacion sin realizar una reorganizacion amplia.
 
 **Hallazgos relacionados**
 
-- Existe un CSV consolidado grande en la raiz.
-- Hay posible codificacion danada en README y documentacion.
-- Existe `viz.py.bak`.
+- Existia un CSV consolidado grande versionado en la raiz.
+- Habia codificacion danada/mojibake en README.
+- Existia `viz.py.bak` versionado.
 
 **Acciones propuestas**
 
-- Mover CSV consolidado grande fuera de raiz solo si las rutas ya estan controladas por `config.yaml`.
-- Proponer ubicacion:
-  - `data/consolidado/`
-  - o `outputs/data/`
+- Retirar CSV consolidado grande del versionamiento sin borrar el archivo local.
+- Mantener el CSV consolidado como artefacto local ignorado por Git mientras no se implemente una nueva ruta controlada.
 - Revisar `viz.py.bak` y definir si se elimina, se archiva o se ignora.
-- Corregir README y documentacion danada en UTF-8.
+- Corregir README y documentacion danada en UTF-8/ASCII.
 - No hacer reorganizacion amplia todavia.
 
 **Entregables**
 
-- Propuesta de ubicacion para CSV consolidado.
+- Politica de versionamiento para CSV consolidado.
 - Decision documentada sobre `viz.py.bak`.
-- README corregido en UTF-8.
+- README corregido en UTF-8/ASCII.
 - Estructura actualizada en documentacion.
 
 **Criterios de aceptacion**
@@ -813,30 +838,34 @@ Ordenar artefactos y documentacion sin realizar una reorganizacion amplia.
 
 **Avance ejecutado**
 
-- Se agrego `pytest` como dependencia directa en `requirements.txt`.
-- Se creo suite minima en `tests/`.
-- Cobertura inicial:
-  - columnas obligatorias;
-  - `id_reporte` no nulo;
-  - `id_reporte` unico cuando se requiere;
-  - rango valido de `mes`;
-  - anios configurados existentes;
-  - advertencia por ventana temporal parcial;
-  - formato de mensajes de validacion;
-  - Excel invalido enviado a `datos_error/` y manifest;
-  - CSV en carpeta de entrada marcado como `skipped`.
-- Pruebas ejecutadas:
-
-```text
-python -m pytest -q
-9 passed, 1 warning
-```
+- README actualizado con instrucciones operativas vigentes.
+- README corregido para eliminar mojibake y documentar el estado actual del pipeline.
+- `.gitignore` actualizado con politica profesional para:
+  - secretos;
+  - entornos locales;
+  - datos productivos;
+  - logs;
+  - manifests;
+  - zonas ETL;
+  - salidas PNG/PDF;
+  - respaldos locales.
+- Se crearon `.gitkeep` para conservar estructura vacia:
+  - `logs/.gitkeep`;
+  - `logs/runs/.gitkeep`;
+  - `datos_work/.gitkeep`;
+  - `datos_error/.gitkeep`;
+  - `datos_procesados/.gitkeep`.
+- Se retiro del versionamiento sin borrar archivos locales:
+  - `SII_concentrado_v3.csv`;
+  - `viz.py.bak`;
+  - `salidas_viz_final/.gitkeep`.
+- Se elimino `docs/project_state.md` por no ser relevante para el proyecto.
+- Se valido que `git status --short -uall` quedara limpio despues de los commits correspondientes.
 
 **Pendientes**
 
-- Agregar fixture de Excel valido minimo para probar procesamiento exitoso real.
-- Agregar smoke test de una grafica principal.
-- Agregar prueba opcional de integracion PostgreSQL.
+- Definir si se requiere README especifico dentro de `datos_entrada/` con convencion de nombres de archivos.
+- Definir politica de retencion para logs/manifests y zonas ETL en operacion productiva.
 
 ### Etapa 7 - Pruebas automatizadas minimas
 
@@ -846,7 +875,7 @@ Agregar una suite minima que permita detectar fallas basicas en contrato de dato
 
 **Hallazgos relacionados**
 
-- No se observan pruebas automatizadas.
+- Inicialmente no se observaban pruebas automatizadas.
 - El ETL y la migracion dependen de supuestos de datos.
 - Las visualizaciones pueden romperse por cambios en columnas o tipos.
 - Las graficas comparativas pueden producir conclusiones incorrectas si comparan anios completos contra anios parciales.
@@ -891,8 +920,46 @@ Agregar una suite minima que permita detectar fallas basicas en contrato de dato
 
 - [ ] Pendiente
 - [ ] En proceso
-- [ ] Completado
-- [ ] Validado
+- [x] Completado
+- [x] Validado
+
+**Avance ejecutado**
+
+- Se agrego `pytest` como dependencia directa en `requirements.txt`.
+- Se creo suite minima en `tests/`.
+- Cobertura inicial:
+  - columnas obligatorias;
+  - `id_reporte` no nulo;
+  - `id_reporte` unico cuando se requiere;
+  - rango valido de `mes`;
+  - anios configurados existentes;
+  - advertencia por ventana temporal parcial;
+  - formato de mensajes de validacion;
+  - Excel invalido enviado a `datos_error/` y manifest;
+  - CSV en carpeta de entrada marcado como `skipped`.
+- Pruebas ejecutadas:
+
+```text
+python -m pytest -q
+14 passed, 1 warning
+```
+
+- Commit relacionado: `afb8b6b test: add validator and ETL operational coverage`.
+- Warning conocido: pandas 2.2.0 emite aviso de que `pyarrow` sera dependencia requerida en pandas 3.0. No bloquea pruebas ni ejecucion. Decision actual: no agregar `pyarrow` mientras el proyecto no lo use directamente.
+- Se agrego smoke test de visualizacion principal:
+  - test: `test_plot_09_carrera_anual_smoke`;
+  - usa dataset temporal pequeno;
+  - escribe PNG en `tmp_path`;
+  - no toca salidas reales ni PDF.
+- Se agregaron pruebas de politica de retencion:
+  - modo deshabilitado no borra;
+  - `dry_run` no borra;
+  - limpieza real controlada elimina solo vencidos y conserva `.gitkeep`.
+
+**Pendientes**
+
+- Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
+- Agregar prueba opcional de integracion PostgreSQL.
 
 ### Etapa 8 - Mejoras operativas posteriores
 
@@ -976,8 +1043,9 @@ Registrar mejoras utiles como backlog, sin ejecutarlas como trabajo inmediato.
 - [x] `datos_work/` creado como zona temporal de trabajo
 - [x] `datos_procesados/` creado como destino opcional por configuracion
 - [x] Manifest JSON por corrida definido
-- [ ] Validacion con Excel real nuevo
-- [ ] Validacion con Excel invalido controlado
+- [x] Validacion con Excel real nuevo
+- [x] Validacion con Excel invalido controlado
+- [x] Validacion automatizada con Excel sintetico valido
 
 ### Contrato de datos
 
@@ -1007,16 +1075,19 @@ Registrar mejoras utiles como backlog, sin ejecutarlas como trabajo inmediato.
 - [x] pytest propuesto
 - [x] pruebas minimas listadas
 - [x] pruebas unitarias separadas de integracion
-- [ ] smoke test de visualizaciones definido
+- [x] smoke test de visualizaciones definido
 - [x] prueba de ventana temporal comparable definida
 - [x] pruebas de ETL operativo con error/skipped definidas
+- [x] warning pandas/pyarrow documentado como no bloqueante
+- [x] politica de retencion/limpieza definida en modo seguro
 
 ### Documentacion
 
-- [ ] README UTF-8 limpio
-- [ ] instrucciones de ejecucion actualizadas
-- [ ] estructura del proyecto documentada
-- [ ] riesgos conocidos documentados
+- [x] README UTF-8/ASCII limpio
+- [x] instrucciones de ejecucion actualizadas
+- [x] estructura del proyecto documentada
+- [x] riesgos conocidos documentados
+- [x] politica Git documentada
 
 ## 6. Orden recomendado de ejecucion
 
@@ -1101,27 +1172,62 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
+- El CSV consolidado `SII_concentrado_v3.csv` permanece como artefacto local de trabajo y queda fuera de Git.
+- Datos productivos, Excels, salidas PNG/PDF, logs, manifests, respaldos y zonas ETL quedan fuera de Git por `.gitignore`.
+- Los archivos originales en `datos_entrada/` no se mueven ni modifican por defecto.
+- El ETL usa copia de trabajo en `datos_work/` cuando `etl.usar_zona_trabajo: true`.
+- `datos_error/` se usa para copias de archivos fallidos o rechazados.
+- README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
+- Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `14 passed, 1 warning`.
 
 ### Pendientes reales
 
 - Definir si el primer despliegue productivo usara PostgreSQL local, Supabase, Cloud SQL u otro servicio administrado.
-- Definir si se moveran o copiaran archivos procesados.
-- Definir ubicacion definitiva del CSV consolidado.
-- Definir nivel minimo de pruebas antes de congelar version.
-- Definir si los datos generados deben permanecer versionados o quedar fuera de Git.
 - Definir politica de manejo de errores: detener, advertir o continuar segun severidad.
-- Definir si la correccion de codificacion documental incluye solo README/docs o tambien literales dentro del codigo.
+- Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.
 - Definir si la ausencia de archivos `.xls` o `.xlsx` debe detener el proceso o solo advertir cuando ya existe CSV consolidado.
 - Definir comportamiento cuando `anio_objetivo` no existe pero se usa para graficas de proyeccion.
 - Definir alcance del front operativo futuro: solo ejecutar ETL, ejecutar reporte completo o administrar configuracion.
-- Decision recomendada pendiente de implementar: usar YTD comparable como criterio base para comparaciones YoY cuando el anio de analisis este incompleto.
+- Validar politica de retencion en ambiente real antes de activar `enabled: true`.
+- Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
+- Agregar prueba opcional de integracion PostgreSQL.
+- Evaluar CI basico para ejecutar `pytest` en cada cambio.
 
 ## 9. Restricciones vigentes
 
-- No modificar codigo en esta tarea.
 - No implementar CLI todavia.
-- No reorganizar toda la estructura.
-- No cambiar visualizaciones.
-- No cambiar logica analitica.
-- No eliminar archivos sin confirmacion.
-- No asumir que `main.py` esta acoplado a PostgreSQL sin verificarlo antes de modificarlo.
+- No reorganizar toda la estructura sin una etapa especifica.
+- No cambiar logica analitica sin requerimiento explicito.
+- No eliminar archivos locales sin confirmacion.
+- No versionar datos productivos, secretos, logs, manifests ni salidas generadas.
+- Mantener PostgreSQL opcional/no bloqueante cuando `database.fail_on_error: false`.
+- Mantener pruebas minimas verdes antes de nuevos commits relevantes.
+
+## 10. Siguientes pasos recomendados
+
+### Prioridad inmediata
+
+1. Validar politica de retencion en ambiente real con `enabled: true` y `dry_run: true`.
+2. Ampliar fixture sintetico de ETL para multiples meses/productos si se requiere mayor cobertura.
+
+### Preparacion productiva
+
+4. Definir destino productivo PostgreSQL:
+   - local;
+   - Supabase;
+   - Cloud SQL;
+   - otro servicio administrado.
+5. Evaluar CI basico para ejecutar:
+
+```text
+python -m pytest -q
+```
+
+6. Documentar convencion de nombres para archivos SII en `datos_entrada/README.md`.
+
+### Backlog controlado
+
+7. Evaluar prueba opcional de integracion PostgreSQL.
+8. Evaluar runner/CLI/frontend operativo para usuarios no tecnicos.
+9. Evaluar politica de almacenamiento externo para PDFs y PNGs generados.

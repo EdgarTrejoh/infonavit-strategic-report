@@ -273,6 +273,31 @@ El log registra:
 - exportacion PDF;
 - errores con stack trace cuando aplica.
 
+## Retencion y Limpieza Operativa
+
+La politica de retencion esta configurada en modo seguro por defecto:
+
+```yaml
+retention:
+  enabled: false
+  dry_run: true
+  max_age_days:
+    datos_work: 7
+    datos_error: 30
+    datos_procesados: 90
+    logs: 30
+    manifests: 90
+```
+
+Comportamiento:
+
+- `enabled: false`: no limpia archivos.
+- `dry_run: true`: reporta que limpiaria, pero no borra.
+- Nunca elimina `.gitkeep`.
+- No toca `datos_entrada/`, `.env`, `.venv/`, `SII_concentrado_v3.csv` ni `salidas_viz_final/`.
+
+La limpieza se ejecuta al final de `main.py`, pero con la configuracion actual queda deshabilitada.
+
 ## Pruebas
 
 Ejecutar:
@@ -293,6 +318,18 @@ Cobertura minima actual:
 - ETL operativo con Excel invalido;
 - manifest y zona de error;
 - CSV en carpeta marcado como `skipped`.
+- smoke test de grafica principal con salida PNG temporal.
+- politica de retencion en modo deshabilitado, dry-run y limpieza real controlada.
+
+Resultado esperado actual:
+
+```text
+14 passed, 1 warning
+```
+
+El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.
+
+`pytest.ini` filtra warnings deprecados internos de matplotlib/pyparsing para mantener la salida de pruebas legible. El warning de pandas/pyarrow se conserva visible por decision operativa.
 
 ## Politica de Git
 
@@ -330,8 +367,7 @@ La base esta preparada para evolucionar hacia:
 
 Antes de productivo, pendientes recomendados:
 
-- fixture de Excel valido minimo;
-- smoke test de una grafica principal;
+- ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
 - prueba opcional de integracion PostgreSQL;
 - politica de retencion/limpieza de logs y zonas ETL;
 - README de `datos_entrada/` con convencion de nombres de archivos.
