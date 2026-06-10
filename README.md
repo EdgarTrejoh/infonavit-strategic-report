@@ -367,6 +367,15 @@ Aclaraciones:
 - no depende de PostgreSQL;
 - no depende de archivos reales.
 
+## Mini reporte ejecutivo sin IA
+
+El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y genera:
+
+- Markdown ejecutivo;
+- JSON de mini reporte.
+
+Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
+
 Ejecutar:
 
 ```powershell
