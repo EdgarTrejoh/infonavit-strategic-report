@@ -1219,6 +1219,34 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 
 Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
 
+Prueba real de punta a punta:
+
+```text
+Supabase/PostgreSQL
+-> data_access.py
+-> report_metrics.py
+-> mini_report.py
+-> outputs/mini_report/
+```
+
+- Modo: solo lectura contra Supabase/PostgreSQL; solo escritura de artefactos locales en `outputs/mini_report/`.
+- Filas leidas: 5,452.
+- Rango de fechas: 2025-01-01 a 2026-04-01.
+- `json_serializable=ok`.
+- `markdown_sections_ok=True`.
+- Archivos generados:
+  - `outputs/mini_report/mini_report.json`
+  - `outputs/mini_report/mini_report.md`
+- Variacion YTD comparable: 15.93%.
+- Linea lider: `Linea II: Adquisicion de vivienda existente`.
+- Producto lider: `Credito Tradicional`.
+- Estado lider: `Nuevo Leon`.
+- Warning metodologico esperado: comparacion YTD, no anios completos.
+- Riesgos pendientes:
+  - `estado` y `mes` estan como `DOUBLE PRECISION` en la tabla cruda.
+  - `nombre_estado` depende de `config.ESTADOS_MX`.
+  - Las vistas SQL analiticas quedan para fase posterior.
+
 ## 7. Criterios para congelar version en GitHub
 
 Antes de congelar una version estable en GitHub, deben cumplirse estos criterios:
