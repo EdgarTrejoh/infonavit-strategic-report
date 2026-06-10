@@ -1139,6 +1139,35 @@ Objetivo: validar el CSV consolidado o dataset base antes del ETL analitico y an
 
 Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin abrir un refactor grande.
 
+## Capa de metricas para mini reporte e IA
+
+Se agrega una capa inicial en `report_metrics.py` para separar calculos estrategicos de las visualizaciones actuales y preparar una futura generacion de mini reporte ejecutivo con insights IA.
+
+Entrada esperada: `df_master` con columnas:
+
+- `fecha`
+- `linea`
+- `producto`
+- `nombre_estado`
+- `Monto`
+
+Salida disponible:
+
+- metricas YTD;
+- YoY comparable;
+- mix linea/producto;
+- Pareto lineas;
+- ranking estatal;
+- contrato JSON-ready para IA.
+
+Aclaraciones:
+
+- no integra OpenAI todavia;
+- no genera PDF todavia;
+- no modifica visualizaciones actuales;
+- no depende de PostgreSQL;
+- no depende de archivos reales.
+
 ## 7. Criterios para congelar version en GitHub
 
 Antes de congelar una version estable en GitHub, deben cumplirse estos criterios:
@@ -1179,7 +1208,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `14 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `21 passed, 1 warning`.
 
 ### Pendientes reales
 

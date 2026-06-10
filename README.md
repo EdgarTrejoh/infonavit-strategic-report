@@ -300,6 +300,35 @@ La limpieza se ejecuta al final de `main.py`, pero con la configuracion actual q
 
 ## Pruebas
 
+## Capa de metricas para mini reporte e IA
+
+El modulo `report_metrics.py` define funciones puras y testeables para preparar metricas reutilizables en un futuro mini reporte ejecutivo con insights asistidos por IA.
+
+Entrada esperada: `df_master` con columnas:
+
+- `fecha`
+- `linea`
+- `producto`
+- `nombre_estado`
+- `Monto`
+
+Salida disponible:
+
+- metricas YTD;
+- YoY comparable;
+- mix linea/producto;
+- Pareto lineas;
+- ranking estatal;
+- contrato JSON-ready para IA.
+
+Aclaraciones:
+
+- no integra OpenAI todavia;
+- no genera PDF todavia;
+- no modifica visualizaciones actuales;
+- no depende de PostgreSQL;
+- no depende de archivos reales.
+
 Ejecutar:
 
 ```powershell
@@ -324,7 +353,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-14 passed, 1 warning
+21 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.
