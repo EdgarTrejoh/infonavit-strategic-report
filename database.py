@@ -25,20 +25,21 @@ try:
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base = declarative_base()
 except Exception as e:
-    logger.warning("Error al inicializar el motor de base de datos: %s", e)
+    logger.warning("Error al inicializar el motor de base de datos: %s", type(e).__name__)
     engine = None
 
 def health_check():
     """Valida disponibilidad de PostgreSQL sin exponer credenciales."""
     if engine is None:
-        return False, "No se pudo inicializar el motor de base de datos."
+        return False, "No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."
 
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
         return True, "Conexion PostgreSQL disponible."
     except Exception as e:
-        return False, f"No se pudo conectar a PostgreSQL: {e}"
+        logger.warning("Health check PostgreSQL fallido: %s", type(e).__name__)
+        return False, "No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."
 
 def get_db():
     """Generador para manejar la sesión de la base de datos."""

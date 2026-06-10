@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 import config
+import retention
 from retention import apply_retention_policy
 
 
@@ -14,6 +15,18 @@ def _make_old_file(path: Path, days_old: int):
 
 
 def _configure_retention(monkeypatch, tmp_path, *, enabled, dry_run):
+    monkeypatch.setattr(retention, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(
+        retention,
+        "SAFE_RETENTION_DIRS",
+        (
+            tmp_path / "datos_work",
+            tmp_path / "datos_error",
+            tmp_path / "datos_procesados",
+            tmp_path / "logs",
+            tmp_path / "logs" / "runs",
+        ),
+    )
     monkeypatch.setattr(config, "RETENTION_ENABLED", enabled)
     monkeypatch.setattr(config, "RETENTION_DRY_RUN", dry_run)
     monkeypatch.setattr(
@@ -72,3 +85,15 @@ def test_retention_deletes_only_expired_files_and_keeps_gitkeep(tmp_path, monkey
     assert not expired_file.exists()
     assert fresh_file.exists()
     assert gitkeep.exists()
+
+
+def test_retention_skips_paths_outside_allowed_dirs(tmp_path, monkeypatch):
+    _configure_retention(monkeypatch, tmp_path, enabled=True, dry_run=False)
+    outside_file = tmp_path / "datos_entrada" / "old.xlsx"
+    _make_old_file(outside_file, days_old=100)
+    monkeypatch.setattr(config, "ETL_RUTA_WORK", str(tmp_path / "datos_entrada"))
+
+    result = apply_retention_policy()
+
+    assert result == []
+    assert outside_file.exists()

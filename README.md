@@ -369,7 +369,7 @@ Antes de productivo, pendientes recomendados:
 
 - ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
 - prueba opcional de integracion PostgreSQL;
-- politica de retencion/limpieza de logs y zonas ETL;
+- automatizacion/operacion productiva de la politica de retencion;
 - README de `datos_entrada/` con convencion de nombres de archivos.
 
 ## Autor y Fuente

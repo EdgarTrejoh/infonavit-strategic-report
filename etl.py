@@ -41,7 +41,7 @@ class DataManager:
         self.df_analisis_global = None
 
         # Variables de análisis
-        self.culpable_linea = None
+        self.linea_ticket_max = None
         self.culpable_ticket_val = 0.0
 
     def run_etl(self):
@@ -60,7 +60,7 @@ class DataManager:
         self.df_analisis_global = self._preparar_analisis_global()
 
         # 4. Análisis preliminar (Detectives)
-        self._detectar_culpable()  # ✅ FIX: antes estaba cortado
+        self._detectar_linea_ticket_maximo()
 
         logger.info("ETL completado exitosamente.")
 
@@ -267,8 +267,8 @@ class DataManager:
         df = df.rename(columns={"Monto": "Monto_Total"})
         return df
 
-    def _detectar_culpable(self):
-        """Busca internamente al culpable y guarda el resultado en atributos de la clase."""
+    def _detectar_linea_ticket_maximo(self):
+        """Identifica la linea con ticket promedio maximo y guarda el resultado."""
         df_recent = self.df_master[self.df_master["fecha"] >= config.FECHA_INICIO_ANIO_ANALISIS].copy()
         if df_recent.empty:
             return
@@ -278,7 +278,7 @@ class DataManager:
 
         if not lineas.empty:
             lineas["Ticket"] = lineas["Monto"] / lineas["Num_Creditos"]
-            self.culpable_linea = lineas["Ticket"].idxmax()
+            self.linea_ticket_max = lineas["Ticket"].idxmax()
             self.culpable_ticket_val = float(lineas["Ticket"].max())
 
     # --------------------------------------------------

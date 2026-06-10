@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
-with open("config.yaml", "r", encoding="utf-8") as f:
+BASE_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = BASE_DIR / "config.yaml"
+
+with CONFIG_PATH.open("r", encoding="utf-8") as f:
     conf_data = yaml.safe_load(f)
 
 # Esto es vital para que el ETL asigne bien los IDs
@@ -67,7 +70,6 @@ COLOR_NEG = "#9F2241"
 COLOR_NEUTRO = "#6F7271"
 
 # 5. Diccionarios
-ESTADOS_MX = {}  # Se llenará con el YAML
 
 # =============================================================================
 # CLASE DE CONFIGURACIÓN VISUAL (ESTÁTICA)

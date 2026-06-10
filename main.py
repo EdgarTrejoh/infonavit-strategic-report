@@ -314,7 +314,7 @@ def main():
         viz.plot_41_matriz_crecimiento_estados(manager.df_master, config.ANIO_OBJETIVO, periodo=3)
 
         # 12: Análisis Forense (Solo si hay culpable)
-        if manager.culpable_linea:
+        if manager.linea_ticket_max:
             viz.plot_12_analysis_forense(manager.df_linea_mensual)
 
         # 10: Heatmap Ticket MoM
