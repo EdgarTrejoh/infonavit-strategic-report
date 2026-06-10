@@ -376,6 +376,19 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 
 Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
 
+## API minima FastAPI
+
+La carpeta `api/` expone una primera API local de solo lectura para el mini reporte ejecutivo.
+
+Endpoints disponibles:
+
+- `GET /health`: estado del servicio, sin tocar Supabase.
+- `GET /db/health`: health check seguro de PostgreSQL/Supabase.
+- `GET /mini-report/json`: genera mini reporte JSON en memoria.
+- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano.
+
+La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+
 Ejecutar:
 
 ```powershell
@@ -400,7 +413,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-22 passed, 1 warning
+47 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.

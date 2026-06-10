@@ -1219,6 +1219,19 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 
 Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
 
+## API minima FastAPI
+
+La carpeta `api/` expone una primera API local de solo lectura para el mini reporte ejecutivo.
+
+Endpoints disponibles:
+
+- `GET /health`: estado del servicio, sin tocar Supabase.
+- `GET /db/health`: health check seguro de PostgreSQL/Supabase.
+- `GET /mini-report/json`: genera mini reporte JSON en memoria.
+- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano.
+
+La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+
 Prueba real de punta a punta:
 
 ```text
@@ -1296,7 +1309,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `22 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `47 passed, 1 warning`.
 
 ### Pendientes reales
 
