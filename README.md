@@ -309,6 +309,19 @@ La limpieza se ejecuta al final de `main.py`, pero con la configuracion actual q
 
 ## Pruebas
 
+## Capa de acceso a datos para mini reporte IA
+
+Supabase/PostgreSQL conserva la tabla cruda `infonavit_historico` en formato largo. El modulo `data_access.py` transforma esa tabla a un `df_master` compatible con el contrato analitico del proyecto.
+
+Flujo previsto:
+
+- `infonavit_historico`: tabla cruda sincronizada desde CSV.
+- `data_access.py`: transforma tabla larga a `df_master`.
+- `report_metrics.py`: calcula metricas ejecutivas reutilizables.
+- IA futura: consumira JSON estructurado, no la tabla cruda.
+
+Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
+
 ## Capa de metricas para mini reporte e IA
 
 El modulo `report_metrics.py` define funciones puras y testeables para preparar metricas reutilizables en un futuro mini reporte ejecutivo con insights asistidos por IA.

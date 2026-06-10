@@ -1147,9 +1147,23 @@ Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin
 | Seguridad de credenciales SQL | Si | `health_check()` devuelve mensaje seguro y `database.py` no retorna `DATABASE_URL`, `DB_PASSWORD` ni DSN completo en errores. Riesgo mitigado parcialmente antes de Supabase/productivo. | Evaluar secret manager en despliegue administrado. |
 | Seguridad de `retention.py` | Si | Confirmado: usa `Path.resolve()`, `PROJECT_ROOT`, carpetas autorizadas, bloqueo de rutas peligrosas y conserva `.gitkeep`. `tests/test_retention.py` cubre ruta fuera de carpetas permitidas. Riesgo mitigado antes de Supabase/productivo. | Validar en ambiente real con `enabled: true` y `dry_run: true` antes de limpieza real. |
 | Seguridad de dependencias | Si | Se agrega `.github/dependabot.yml` para revisiones semanales de dependencias `pip`. Se mantienen versiones ancladas. | Evaluar `pip-audit` posteriormente, sin agregarlo aun al CI. |
+| Catalogo `ESTADOS_MX` en `sii_excel_etl.py` | No | `config.py` no tiene duplicidad activa de `ESTADOS_MX`; sin embargo, existe duplicidad funcional porque `config.yaml` mantiene `id_estado -> nombre_estado` y `sii_excel_etl.py` mantiene `nombre_estado -> id_estado`. No se corrige en este bloque para no mezclar cambios sobre entrada Excel. | Centralizar despues creando catalogo inverso derivado desde `config.ESTADOS_MX` + `ESTADO_ALIASES`, reemplazar el hardcode de `sii_excel_etl.py` y cubrir con pruebas para `Aguascalientes`, `CDMX` y `Estado de Mexico`. |
 | Manejo global del estado en `config.py` | No | `config.py` funciona como estado global mutable. Es aceptable para ejecucion local tipo script, pero fragil para ejecucion concurrente, API/web service, jobs paralelos, multiples configuraciones por usuario y Cloud Run/workers. No se recomienda Singleton como primera opcion porque sigue siendo estado global. | Criticidad media-alta para productivo, complejidad media/alta. Crear dataclasses inmutables `AppConfig`, `DatabaseConfig`, `EtlConfig`, `ReportConfig`; crear `load_config(path) -> AppConfig`; mantener `config.py` temporalmente como compatibilidad; migrar progresivamente modulos nuevos. `report_metrics.py` ya esta bien orientado porque no depende de `config.py`. |
 | Carga de memoria en `DataManager` | No | `DataManager` mantiene `df_master`/`df_global` en memoria. Es razonable para volumen actual mensual/consolidado, pero puede escalar mal si crecen anios, fuentes, metricas o usuarios. | No optimizar sin medicion. Medir memoria y tiempos, registrar tamanos de dataframes, mover calculos pesados a SQL/vistas analiticas si escala, evaluar BigQuery o tablas agregadas para analitica mayor. |
 | Cobertura limitada en `main.py` y `etl.py` | No | Ya existen pruebas utiles de contrato, ETL operativo, retencion, visual smoke test y `report_metrics`. No hay cobertura rigurosa de `main.py` y `etl.py`; `main.py` requiere mocks/fixtures por orquestar archivos, PDF, PostgreSQL, graficas y logs. | Agregar pruebas de `DataManager` para columnas esperadas, agregados, `df_linea_mensual`, `Ticket_Promedio = Monto / Num_Creditos` y ceros/nulos; pruebas parciales de `main.py` con mocks. No perseguir coverage porcentual sin valor funcional. |
+
+## Capa de acceso a datos para mini reporte IA
+
+Supabase/PostgreSQL conserva la tabla cruda `infonavit_historico` en formato largo. El modulo `data_access.py` transforma esa tabla a un `df_master` compatible con `report_metrics.py`.
+
+Flujo previsto:
+
+- `infonavit_historico`: tabla cruda sincronizada desde CSV.
+- `data_access.py`: transforma tabla larga a `df_master`.
+- `report_metrics.py`: calcula metricas ejecutivas reutilizables.
+- IA futura: consumira JSON estructurado, no la tabla cruda.
+
+Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
 
 ## Capa de metricas para mini reporte e IA
 
@@ -1234,6 +1248,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 - Definir politica de manejo de errores: detener, advertir o continuar segun severidad.
 - Definir vistas/tablas analiticas para mini reporte.
+- Centralizar catalogo de estados nombre/id eliminando duplicidad funcional entre `config.yaml` y `sii_excel_etl.py`.
 - Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.
 - Definir si la ausencia de archivos `.xls` o `.xlsx` debe detener el proceso o solo advertir cuando ya existe CSV consolidado.
 - Definir comportamiento cuando `anio_objetivo` no existe pero se usa para graficas de proyeccion.

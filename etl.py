@@ -42,7 +42,7 @@ class DataManager:
 
         # Variables de análisis
         self.linea_ticket_max = None
-        self.culpable_ticket_val = 0.0
+        self.ticket_max_val = 0.0
 
     def run_etl(self):
         """Ejecuta todo el flujo de carga y transformación una sola vez."""
@@ -279,7 +279,7 @@ class DataManager:
         if not lineas.empty:
             lineas["Ticket"] = lineas["Monto"] / lineas["Num_Creditos"]
             self.linea_ticket_max = lineas["Ticket"].idxmax()
-            self.culpable_ticket_val = float(lineas["Ticket"].max())
+            self.ticket_max_val = float(lineas["Ticket"].max())
 
     # --------------------------------------------------
     # MÉTODOS PÚBLICOS (Helpers para las gráficas)
