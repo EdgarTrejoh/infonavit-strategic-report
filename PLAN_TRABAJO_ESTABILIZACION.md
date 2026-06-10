@@ -1165,6 +1165,22 @@ Flujo previsto:
 
 Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
 
+Validacion de solo lectura Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA:
+
+- Fecha de validacion: 2026-06-10.
+- Filas leidas: 5,452.
+- Rango de fechas: 2025-01-01 a 2026-04-01.
+- Contrato `df_master`: OK.
+- JSON serializable: OK.
+- Variacion YTD comparable: 15.93%.
+- Advertencia metodologica esperada: comparacion YTD, no anios completos.
+
+Riesgos pendientes:
+
+- `estado` y `mes` estan como `DOUBLE PRECISION` en la tabla cruda.
+- `nombre_estado` depende de `config.ESTADOS_MX`.
+- Las vistas SQL analiticas quedan para fase posterior.
+
 ## Capa de metricas para mini reporte e IA
 
 Se agrega una capa inicial en `report_metrics.py` para separar calculos estrategicos de las visualizaciones actuales y preparar una futura generacion de mini reporte ejecutivo con insights IA.
@@ -1231,6 +1247,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - La IA no consumira datos crudos directamente; consumira JSON estructurado de `report_metrics.py` o vistas/tablas analiticas.
 - Supabase validado: `health_check` exitoso, tabla `infonavit_historico` disponible y conteos correctos.
 - Conteos Supabase validados: `filas_totales=109430`, `ids_unicos=109430`, `grupos_duplicados=0`.
+- Validacion Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA completada: 5,452 filas, rango 2025-01-01 a 2026-04-01, contrato `df_master` OK, JSON serializable OK, variacion YTD comparable 15.93%.
 - Migrador manual protegido: requiere `python migrate_csv_to_pg.py --run --yes`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
