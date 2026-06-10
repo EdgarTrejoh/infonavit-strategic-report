@@ -394,16 +394,33 @@ No debe versionar:
 
 ## Publicacion Productiva
 
-La base esta preparada para evolucionar hacia:
+Decision tecnica de destino inicial de datos:
 
-- Cloud Run u otro servicio de ejecucion;
-- Supabase/PostgreSQL administrado;
-- runner web o frontend para usuarios;
-- CI con pruebas automatizadas;
-- almacenamiento externo de insumos y salidas.
+- Desarrollo local: PostgreSQL local.
+- Primer despliegue productivo: Supabase PostgreSQL.
+- Futuro enterprise/GCP: Cloud SQL o BigQuery.
+
+Motivo:
+
+- mantiene compatibilidad PostgreSQL;
+- el proyecto ya soporta `DATABASE_URL`;
+- reduce complejidad operativa frente a Cloud SQL para una primera version;
+- es suficiente para el primer mini reporte interpretativo;
+- permite centralizar datos para una futura capa IA.
+
+Criterio para IA:
+
+- la IA no consumira datos crudos directamente;
+- la IA consumira JSON estructurado generado por `report_metrics.py` o vistas/tablas analiticas.
 
 Antes de productivo, pendientes recomendados:
 
+- crear proyecto Supabase;
+- configurar `DATABASE_URL` en `.env` local;
+- probar `health_check`;
+- ejecutar migracion controlada;
+- validar conteos;
+- definir vistas/tablas analiticas para mini reporte;
 - ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
 - prueba opcional de integracion PostgreSQL;
 - automatizacion/operacion productiva de la politica de retencion;

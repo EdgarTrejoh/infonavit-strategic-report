@@ -1210,6 +1210,10 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Version final de Python elegida: Python 3.11.
 - PostgreSQL es importante, pero no debe bloquear el PDF si `fail_on_error: false`.
 - `DATABASE_URL` ya quedo agregado como compatibilidad para servicios administrados.
+- Destino productivo inicial de datos definido: Supabase PostgreSQL.
+- Desarrollo local definido: PostgreSQL local.
+- Futuro enterprise/GCP definido: Cloud SQL o BigQuery.
+- La IA no consumira datos crudos directamente; consumira JSON estructurado de `report_metrics.py` o vistas/tablas analiticas.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1224,8 +1228,13 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Pendientes reales
 
-- Definir si el primer despliegue productivo usara PostgreSQL local, Supabase, Cloud SQL u otro servicio administrado.
 - Definir politica de manejo de errores: detener, advertir o continuar segun severidad.
+- Crear proyecto Supabase.
+- Configurar `DATABASE_URL` en `.env` local.
+- Probar `health_check` contra Supabase.
+- Ejecutar migracion controlada.
+- Validar conteos post-migracion.
+- Definir vistas/tablas analiticas para mini reporte.
 - Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.
 - Definir si la ausencia de archivos `.xls` o `.xlsx` debe detener el proceso o solo advertir cuando ya existe CSV consolidado.
 - Definir comportamiento cuando `anio_objetivo` no existe pero se usa para graficas de proyeccion.
@@ -1254,11 +1263,13 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Preparacion productiva
 
-4. Definir destino productivo PostgreSQL:
-   - local;
-   - Supabase;
-   - Cloud SQL;
-   - otro servicio administrado.
+4. Preparar primer destino productivo en Supabase PostgreSQL:
+   - crear proyecto Supabase;
+   - configurar `DATABASE_URL` en `.env` local;
+   - probar `health_check`;
+   - ejecutar migracion controlada;
+   - validar conteos;
+   - definir vistas/tablas analiticas para mini reporte.
 5. Evaluar CI basico para ejecutar:
 
 ```text
