@@ -4,7 +4,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from sii_excel_etl import ejecutar_archivo_excel
+import config
+from sii_excel_etl import ejecutar_archivo_excel, normalizar_estado
+
+
+def test_normalizar_estado_uses_configured_aliases(monkeypatch):
+    monkeypatch.setattr(config, "ESTADO_ALIASES", {"CDMX": "Ciudad de México"})
+
+    assert normalizar_estado(" CDMX ") == "Ciudad de México"
 
 
 def test_valid_excel_uses_work_zone_and_manifest_ok(tmp_path, monkeypatch):

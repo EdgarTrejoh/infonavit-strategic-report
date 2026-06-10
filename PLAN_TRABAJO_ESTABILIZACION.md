@@ -1139,6 +1139,18 @@ Objetivo: validar el CSV consolidado o dataset base antes del ETL analitico y an
 
 Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin abrir un refactor grande.
 
+## Observaciones tecnicas revisadas y decision
+
+| Observacion | Atender ahora | Accion ejecutada o justificacion | Fase posterior |
+|---|---:|---|---|
+| Catalogos / aliases de estados hardcodeados en `sii_excel_etl.py` | Si | Se movieron aliases simples a `config.yaml` bajo `estado_aliases`. `sii_excel_etl.py` mantiene fallback interno para compatibilidad. | Evaluar catalogos externos solo si crecen reglas o fuentes. |
+| Seguridad de credenciales SQL | Si | `health_check()` devuelve mensaje seguro y `database.py` no retorna `DATABASE_URL`, `DB_PASSWORD` ni DSN completo en errores. Riesgo mitigado parcialmente antes de Supabase/productivo. | Evaluar secret manager en despliegue administrado. |
+| Seguridad de `retention.py` | Si | Confirmado: usa `Path.resolve()`, `PROJECT_ROOT`, carpetas autorizadas, bloqueo de rutas peligrosas y conserva `.gitkeep`. `tests/test_retention.py` cubre ruta fuera de carpetas permitidas. Riesgo mitigado antes de Supabase/productivo. | Validar en ambiente real con `enabled: true` y `dry_run: true` antes de limpieza real. |
+| Seguridad de dependencias | Si | Se agrega `.github/dependabot.yml` para revisiones semanales de dependencias `pip`. Se mantienen versiones ancladas. | Evaluar `pip-audit` posteriormente, sin agregarlo aun al CI. |
+| Manejo global del estado en `config.py` | No | `config.py` funciona como estado global mutable. Es aceptable para ejecucion local tipo script, pero fragil para ejecucion concurrente, API/web service, jobs paralelos, multiples configuraciones por usuario y Cloud Run/workers. No se recomienda Singleton como primera opcion porque sigue siendo estado global. | Criticidad media-alta para productivo, complejidad media/alta. Crear dataclasses inmutables `AppConfig`, `DatabaseConfig`, `EtlConfig`, `ReportConfig`; crear `load_config(path) -> AppConfig`; mantener `config.py` temporalmente como compatibilidad; migrar progresivamente modulos nuevos. `report_metrics.py` ya esta bien orientado porque no depende de `config.py`. |
+| Carga de memoria en `DataManager` | No | `DataManager` mantiene `df_master`/`df_global` en memoria. Es razonable para volumen actual mensual/consolidado, pero puede escalar mal si crecen anios, fuentes, metricas o usuarios. | No optimizar sin medicion. Medir memoria y tiempos, registrar tamanos de dataframes, mover calculos pesados a SQL/vistas analiticas si escala, evaluar BigQuery o tablas agregadas para analitica mayor. |
+| Cobertura limitada en `main.py` y `etl.py` | No | Ya existen pruebas utiles de contrato, ETL operativo, retencion, visual smoke test y `report_metrics`. No hay cobertura rigurosa de `main.py` y `etl.py`; `main.py` requiere mocks/fixtures por orquestar archivos, PDF, PostgreSQL, graficas y logs. | Agregar pruebas de `DataManager` para columnas esperadas, agregados, `df_linea_mensual`, `Ticket_Promedio = Monto / Num_Creditos` y ceros/nulos; pruebas parciales de `main.py` con mocks. No perseguir coverage porcentual sin valor funcional. |
+
 ## Capa de metricas para mini reporte e IA
 
 Se agrega una capa inicial en `report_metrics.py` para separar calculos estrategicos de las visualizaciones actuales y preparar una futura generacion de mini reporte ejecutivo con insights IA.
@@ -1208,7 +1220,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `21 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `22 passed, 1 warning`.
 
 ### Pendientes reales
 

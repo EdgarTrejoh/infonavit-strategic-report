@@ -15,6 +15,8 @@ from datetime import datetime
 
 import pandas as pd
 
+import config
+
 logger = logging.getLogger(__name__)
 
 ESTADOS_MX = {
@@ -59,13 +61,15 @@ ESTADOS_MX = {
     "Zacatecas": 32,
 }
 
-MAPA_LIMPIEZA = {
+MAPA_LIMPIEZA_DEFAULT = {
     "CDMX": "Ciudad de México",
+    "Ciudad de Mexico": "Ciudad de México",
     "Mexico": "Estado de México",
     "México": "Estado de México",
     "Edo. de Mexico": "Estado de México",
     "Edo. de México": "Estado de México",
     "Distrito Federal": "Ciudad de México",
+    "Estado de Mexico": "Estado de México",
 }
 
 MESES_MAP = {
@@ -89,7 +93,8 @@ def normalizar_estado(nombre):
     if pd.isna(nombre):
         return None
     nombre_limpio = str(nombre).strip()
-    return MAPA_LIMPIEZA.get(nombre_limpio, nombre_limpio)
+    mapa_limpieza = getattr(config, "ESTADO_ALIASES", None) or MAPA_LIMPIEZA_DEFAULT
+    return mapa_limpieza.get(nombre_limpio, nombre_limpio)
 
 
 def generar_id_reporte(row):

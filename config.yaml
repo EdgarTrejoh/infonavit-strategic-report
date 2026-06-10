@@ -44,6 +44,16 @@ metricas:
   col_monto: "Monto de crédito Infonavit"
   col_num: "Número de créditos formalizados"
 
+estado_aliases:
+  "CDMX": "Ciudad de México"
+  "Ciudad de Mexico": "Ciudad de México"
+  "Distrito Federal": "Ciudad de México"
+  "Mexico": "Estado de México"
+  "México": "Estado de México"
+  "Edo. de Mexico": "Estado de México"
+  "Edo. de México": "Estado de México"
+  "Estado de Mexico": "Estado de México"
+
 # --------------------------------------------------
 # ESTILOS — SOLO PALETA CORPORATIVA (sin rojo alarma)
 # --------------------------------------------------

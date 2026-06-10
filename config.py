@@ -10,6 +10,7 @@ with CONFIG_PATH.open("r", encoding="utf-8") as f:
 
 # Esto es vital para que el ETL asigne bien los IDs
 ESTADOS_MX = conf_data.get("estados_mx", {})
+ESTADO_ALIASES = conf_data.get("estado_aliases", {})
 
 # =============================================================================
 # VARIABLES GLOBALES (Placeholders)

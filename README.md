@@ -353,7 +353,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-21 passed, 1 warning
+22 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.
@@ -383,6 +383,14 @@ No debe versionar:
 - manifests;
 - zonas operativas con datos;
 - respaldos reales.
+
+## Seguridad y mantenimiento
+
+- Dependabot queda configurado para revisar dependencias `pip` semanalmente.
+- `requirements.txt` se mantiene anclado para reproducibilidad; las actualizaciones deben entrar por PR y con pruebas.
+- `database.py` evita devolver mensajes crudos de conexion PostgreSQL para no exponer credenciales.
+- Los aliases simples de estados usados por el ETL se configuran en `config.yaml` bajo `estado_aliases`, con fallback interno para compatibilidad.
+- `pip-audit` queda como evaluacion posterior; no se agrega todavia al flujo de CI.
 
 ## Publicacion Productiva
 
