@@ -474,7 +474,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-54 passed, 1 warning
+56 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.

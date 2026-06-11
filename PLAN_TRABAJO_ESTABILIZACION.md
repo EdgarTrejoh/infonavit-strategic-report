@@ -199,7 +199,8 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Tests minimos agregados y validados: `14 passed, 1 warning`.
+- Estado vigente de pruebas: `56 passed, 1 warning`.
+- Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
   - `retention.dry_run: true`;
@@ -211,6 +212,12 @@ python main.py
   - `afb8b6b test: add validator and ETL operational coverage`
   - `ab8bd1e chore: remove obsolete project state document`
   - `3b727ac docs: update operational README`
+
+### Lectura del estado
+
+- Vigente: pipeline local funcional, PostgreSQL/Supabase opcional y no bloqueante, ETL con zonas de trabajo, validacion de contrato, logging, manifests, retencion segura, mini reporte sin IA, API FastAPI solo lectura, Docker preparado para Cloud Run y operational readiness inicial aplicado.
+- Historico: hallazgos iniciales de entorno, problemas de PATH, pruebas parciales y bloqueos de Unicode quedan documentados como contexto, no como bloqueos actuales.
+- Backlog posterior: refactors mayores, AppConfig, vistas SQL analiticas, IA, frontend, autenticacion formal y despliegue Cloud Run controlado.
 
 ## 4. Etapas priorizadas
 
@@ -1148,7 +1155,9 @@ Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin
 | Seguridad de `retention.py` | Si | Confirmado: usa `Path.resolve()`, `PROJECT_ROOT`, carpetas autorizadas, bloqueo de rutas peligrosas y conserva `.gitkeep`. `tests/test_retention.py` cubre ruta fuera de carpetas permitidas. Riesgo mitigado antes de Supabase/productivo. | Validar en ambiente real con `enabled: true` y `dry_run: true` antes de limpieza real. |
 | Seguridad de dependencias | Si | Se agrega `.github/dependabot.yml` para revisiones semanales de dependencias `pip`. Se mantienen versiones ancladas. | Evaluar `pip-audit` posteriormente, sin agregarlo aun al CI. |
 | Catalogo `ESTADOS_MX` en `sii_excel_etl.py` | No | `config.py` no tiene duplicidad activa de `ESTADOS_MX`; sin embargo, existe duplicidad funcional porque `config.yaml` mantiene `id_estado -> nombre_estado` y `sii_excel_etl.py` mantiene `nombre_estado -> id_estado`. No se corrige en este bloque para no mezclar cambios sobre entrada Excel. | Centralizar despues creando catalogo inverso derivado desde `config.ESTADOS_MX` + `ESTADO_ALIASES`, reemplazar el hardcode de `sii_excel_etl.py` y cubrir con pruebas para `Aguascalientes`, `CDMX` y `Estado de Mexico`. |
+| `config.py` hace I/O al importarse | Parcialmente si | Confirmado que `config.py` carga `config.yaml` con ruta relativa a `config.py` mediante `BASE_DIR` y `CONFIG_PATH`; se agrega prueba de import/recarga desde otro `cwd`. | Refactor posterior a `AppConfig`/`load_config(path)` sin I/O global al importar. |
 | Manejo global del estado en `config.py` | No | `config.py` funciona como estado global mutable. Es aceptable para ejecucion local tipo script, pero fragil para ejecucion concurrente, API/web service, jobs paralelos, multiples configuraciones por usuario y Cloud Run/workers. No se recomienda Singleton como primera opcion porque sigue siendo estado global. | Criticidad media-alta para productivo, complejidad media/alta. Crear dataclasses inmutables `AppConfig`, `DatabaseConfig`, `EtlConfig`, `ReportConfig`; crear `load_config(path) -> AppConfig`; mantener `config.py` temporalmente como compatibilidad; migrar progresivamente modulos nuevos. `report_metrics.py` ya esta bien orientado porque no depende de `config.py`. |
+| `viz/__init__.py` usa `import *` | Si | Se reemplaza por imports explicitos conservando la API publica usada por `main.py`; se agrega `__all__` y prueba de exports sin generar PNG/PDF. | Evaluar imports directos por modulo si se refactoriza `main.py` o se separa una capa de visualizaciones por dominio. |
 | Carga de memoria en `DataManager` | No | `DataManager` mantiene `df_master`/`df_global` en memoria. Es razonable para volumen actual mensual/consolidado, pero puede escalar mal si crecen anios, fuentes, metricas o usuarios. | No optimizar sin medicion. Medir memoria y tiempos, registrar tamanos de dataframes, mover calculos pesados a SQL/vistas analiticas si escala, evaluar BigQuery o tablas agregadas para analitica mayor. |
 | Cobertura limitada en `main.py` y `etl.py` | No | Ya existen pruebas utiles de contrato, ETL operativo, retencion, visual smoke test y `report_metrics`. No hay cobertura rigurosa de `main.py` y `etl.py`; `main.py` requiere mocks/fixtures por orquestar archivos, PDF, PostgreSQL, graficas y logs. | Agregar pruebas de `DataManager` para columnas esperadas, agregados, `df_linea_mensual`, `Ticket_Promedio = Monto / Num_Creditos` y ceros/nulos; pruebas parciales de `main.py` con mocks. No perseguir coverage porcentual sin valor funcional. |
 
@@ -1357,6 +1366,9 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Conteos Supabase validados: `filas_totales=109430`, `ids_unicos=109430`, `grupos_duplicados=0`.
 - Validacion Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA completada: 5,452 filas, rango 2025-01-01 a 2026-04-01, contrato `df_master` OK, JSON serializable OK, variacion YTD comparable 15.93%.
 - Migrador manual protegido: requiere `python migrate_csv_to_pg.py --run --yes`.
+- API FastAPI solo lectura implementada y validada localmente.
+- Dockerfile y `.dockerignore` creados para despliegue futuro en Cloud Run.
+- Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1367,7 +1379,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `54 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `56 passed, 1 warning`.
 
 ### Pendientes reales
 
@@ -1382,10 +1394,12 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
 - Agregar prueba opcional de integracion PostgreSQL.
 - Evaluar CI basico para ejecutar `pytest` en cada cambio.
+- Definir control de acceso de API antes de Cloud Run, por ejemplo API key por header.
+- Crear/usar usuario de base de datos de solo lectura para la API.
 
 ## 9. Restricciones vigentes
 
-- No implementar CLI todavia.
+- No implementar nuevas CLI adicionales sin etapa especifica. La CLI segura del migrador ya esta implementada.
 - No reorganizar toda la estructura sin una etapa especifica.
 - No cambiar logica analitica sin requerimiento explicito.
 - No eliminar archivos locales sin confirmacion.
@@ -1397,22 +1411,25 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Validar politica de retencion en ambiente real con `enabled: true` y `dry_run: true`.
-2. Ampliar fixture sintetico de ETL para multiples meses/productos si se requiere mayor cobertura.
+1. Cerrar limpieza de coherencia documental y riesgos tecnicos menores previos a Cloud Run.
+2. Agregar CI basico con `pytest` para cada push o pull request.
+3. Definir control de acceso de API antes de Cloud Run, por ejemplo API key por header.
+4. Crear usuario DB de solo lectura para la API.
 
 ### Preparacion productiva
 
-4. Definir vistas/tablas analiticas para mini reporte sobre Supabase PostgreSQL.
-5. Evaluar CI basico para ejecutar:
+5. Ejecutar deploy controlado en Cloud Run solo despues de presupuesto, limites de instancia, Secret Manager y control de acceso.
+6. Mantener validacion local con:
 
 ```text
 python -m pytest -q
 ```
 
-6. Documentar convencion de nombres para archivos SII en `datos_entrada/README.md`.
+7. Definir vistas/tablas analiticas para mini reporte sobre Supabase PostgreSQL como fase posterior.
 
 ### Backlog controlado
 
-7. Evaluar prueba opcional de integracion PostgreSQL.
-8. Evaluar runner/CLI/frontend operativo para usuarios no tecnicos.
-9. Evaluar politica de almacenamiento externo para PDFs y PNGs generados.
+8. Evaluar prueba opcional de integracion PostgreSQL.
+9. Evaluar runner/CLI/frontend operativo para usuarios no tecnicos.
+10. Evaluar politica de almacenamiento externo para PDFs y PNGs generados.
+11. Integrar IA solo despues de estabilizar API, control de acceso y contrato de datos.
