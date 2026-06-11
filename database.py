@@ -16,6 +16,12 @@ DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "infonavit")
 
+if DATABASE_URL_ENV is None and os.getenv("DB_PASSWORD") is None:
+    logger.warning(
+        "DB_PASSWORD no configurado; se usara el default local de desarrollo. "
+        "En produccion use Secret Manager o una variable segura."
+    )
+
 # String de conexión para PostgreSQL usando psycopg2
 DATABASE_URL = DATABASE_URL_ENV or f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 

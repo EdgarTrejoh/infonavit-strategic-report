@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `56 passed, 1 warning`.
+- Estado vigente de pruebas: `59 passed, 1 warning`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1153,7 +1153,13 @@ Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin
 | Catalogos / aliases de estados hardcodeados en `sii_excel_etl.py` | Si | Se movieron aliases simples a `config.yaml` bajo `estado_aliases`. `sii_excel_etl.py` mantiene fallback interno para compatibilidad. | Evaluar catalogos externos solo si crecen reglas o fuentes. |
 | Seguridad de credenciales SQL | Si | `health_check()` devuelve mensaje seguro y `database.py` no retorna `DATABASE_URL`, `DB_PASSWORD` ni DSN completo en errores. Riesgo mitigado parcialmente antes de Supabase/productivo. | Evaluar secret manager en despliegue administrado. |
 | Seguridad de `retention.py` | Si | Confirmado: usa `Path.resolve()`, `PROJECT_ROOT`, carpetas autorizadas, bloqueo de rutas peligrosas y conserva `.gitkeep`. `tests/test_retention.py` cubre ruta fuera de carpetas permitidas. Riesgo mitigado antes de Supabase/productivo. | Validar en ambiente real con `enabled: true` y `dry_run: true` antes de limpieza real. |
+| Revision v3 - retencion operativa | Si | Se agrega CLI segura `python retention.py --dry-run` y `python retention.py --run --yes`; dry-run local ejecutado sin borrar archivos y detecto 7 candidatos en `datos_work/`. | Definir ventana de retencion productiva y automatizacion solo despues de backups/restore. |
 | Seguridad de dependencias | Si | Se agrega `.github/dependabot.yml` para revisiones semanales de dependencias `pip`. Se mantienen versiones ancladas. | Evaluar `pip-audit` posteriormente, sin agregarlo aun al CI. |
+| Revision v3 - dependencia API sobre PostgreSQL poblado | Si | Documentado que la API no lee CSV, no migra datos y requiere `infonavit_historico` existente/poblada para `/mini-report/json` y `/mini-report/markdown`. | Agregar health/readiness ampliado si se publica API. |
+| Revision v3 - contratos diferenciados | Si | Documentado: `contract_validator.py` valida CSV largo; `data_access.py` valida `df_master`; `report_metrics.py` consume `df_master`; `mini_report.py` consume `ai_context`/JSON. | Formalizar versionado de contratos si se crean vistas SQL o API publica. |
+| Revision v3 - warnings globales en `main.py` | Si | Se reemplaza `warnings.filterwarnings("ignore")` global por filtros especificos para warnings no criticos de `matplotlib`; el warning pandas/pyarrow permanece visible. | Revisar nuevos warnings caso por caso, sin silenciamiento global. |
+| Revision v3 - `DB_PASSWORD` default | Si | `database.py` conserva default local para no romper desarrollo y registra advertencia segura si no se configura `DB_PASSWORD` ni `DATABASE_URL`; no imprime credenciales ni DSN. | En Cloud Run usar Secret Manager o variable segura obligatoria. |
+| Revision v3 - deduplicacion O(n) en ETL | Si | Se reemplaza filtro con `apply(axis=1)` por merge vectorizado por `anio`/`mes`, manteniendo comportamiento equivalente; se agrega prueba de periodos ya procesados. | Si cambia la granularidad incremental, revisar si la llave debe incluir archivo/fuente ademas de periodo. |
 | Catalogo `ESTADOS_MX` en `sii_excel_etl.py` | No | `config.py` no tiene duplicidad activa de `ESTADOS_MX`; sin embargo, existe duplicidad funcional porque `config.yaml` mantiene `id_estado -> nombre_estado` y `sii_excel_etl.py` mantiene `nombre_estado -> id_estado`. No se corrige en este bloque para no mezclar cambios sobre entrada Excel. | Centralizar despues creando catalogo inverso derivado desde `config.ESTADOS_MX` + `ESTADO_ALIASES`, reemplazar el hardcode de `sii_excel_etl.py` y cubrir con pruebas para `Aguascalientes`, `CDMX` y `Estado de Mexico`. |
 | `config.py` hace I/O al importarse | Parcialmente si | Confirmado que `config.py` carga `config.yaml` con ruta relativa a `config.py` mediante `BASE_DIR` y `CONFIG_PATH`; se agrega prueba de import/recarga desde otro `cwd`. | Refactor posterior a `AppConfig`/`load_config(path)` sin I/O global al importar. |
 | Manejo global del estado en `config.py` | No | `config.py` funciona como estado global mutable. Es aceptable para ejecucion local tipo script, pero fragil para ejecucion concurrente, API/web service, jobs paralelos, multiples configuraciones por usuario y Cloud Run/workers. No se recomienda Singleton como primera opcion porque sigue siendo estado global. | Criticidad media-alta para productivo, complejidad media/alta. Crear dataclasses inmutables `AppConfig`, `DatabaseConfig`, `EtlConfig`, `ReportConfig`; crear `load_config(path) -> AppConfig`; mantener `config.py` temporalmente como compatibilidad; migrar progresivamente modulos nuevos. `report_metrics.py` ya esta bien orientado porque no depende de `config.py`. |
@@ -1379,7 +1385,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `56 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `59 passed, 1 warning`.
 
 ### Pendientes reales
 
@@ -1396,6 +1402,11 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Evaluar CI basico para ejecutar `pytest` en cada cambio.
 - Definir control de acceso de API antes de Cloud Run, por ejemplo API key por header.
 - Crear/usar usuario de base de datos de solo lectura para la API.
+- Configurar Secret Manager o variables seguras en Cloud Run.
+- Configurar presupuesto y alertas GCP antes del despliegue.
+- Definir politica de backups Supabase y prueba de restore.
+- Mantener vistas SQL como fase posterior.
+- Mantener refactor `AppConfig` como fase posterior.
 
 ## 9. Restricciones vigentes
 

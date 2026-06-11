@@ -97,3 +97,25 @@ def test_retention_skips_paths_outside_allowed_dirs(tmp_path, monkeypatch):
 
     assert result == []
     assert outside_file.exists()
+
+
+def test_retention_cli_dry_run_keeps_expired_files(tmp_path, monkeypatch, capsys):
+    _configure_retention(monkeypatch, tmp_path, enabled=False, dry_run=False)
+    old_file = tmp_path / "datos_work" / "old.xlsx"
+    _make_old_file(old_file, days_old=10)
+
+    exit_code = retention.run_cli(["--dry-run"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert str(old_file) in captured.out
+    assert old_file.exists()
+
+
+def test_retention_cli_run_requires_yes():
+    try:
+        retention.run_cli(["--run"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("--run sin --yes debe rechazar ejecucion")

@@ -325,10 +325,10 @@ def ejecutar_concentrado(
 
     if os.path.exists(archivo_salida):
         historico = pd.read_csv(archivo_salida)
-        periodos_procesados = set(zip(historico["anio"], historico["mes"]))
+        periodos_procesados = historico[["anio", "mes"]].drop_duplicates().assign(_periodo_procesado=True)
     else:
         historico = pd.DataFrame()
-        periodos_procesados = set()
+        periodos_procesados = pd.DataFrame(columns=["anio", "mes", "_periodo_procesado"])
 
     bloques_nuevos = []
     archivos_exitosos = []
@@ -350,9 +350,8 @@ def ejecutar_concentrado(
         if df_temp is None:
             continue
 
-        df_nuevo = df_temp[
-            ~df_temp.apply(lambda x: (x["anio"], x["mes"]) in periodos_procesados, axis=1)
-        ]
+        df_nuevo = df_temp.merge(periodos_procesados, on=["anio", "mes"], how="left")
+        df_nuevo = df_nuevo[df_nuevo["_periodo_procesado"].isna()].drop(columns=["_periodo_procesado"])
 
         if not df_nuevo.empty:
             bloques_nuevos.append(df_nuevo)

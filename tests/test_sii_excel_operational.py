@@ -139,3 +139,82 @@ def test_csv_in_input_folder_is_skipped_in_manifest(tmp_path, monkeypatch):
     manifest = json.loads(Path(manifests[0]).read_text(encoding="utf-8"))
     assert manifest["files"][0]["status"] == "skipped"
     assert "CSV detectado" in manifest["files"][0]["message"]
+
+
+def test_ejecutar_concentrado_skips_periods_already_processed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    entrada = tmp_path / "datos_entrada"
+    entrada.mkdir()
+    (entrada / "SII_2026.xlsx").write_text("placeholder", encoding="utf-8")
+
+    salida = tmp_path / "consolidado.csv"
+    pd.DataFrame(
+        [
+            {
+                "id_reporte": "2026-1-1-L2-Producto A-Monto",
+                "anio": 2026,
+                "estado": 1,
+                "mes": 1,
+                "linea": "L2",
+                "producto": "Producto A",
+                "metrica": "Monto",
+                "valor": 100.0,
+                "periodicidad": "Mensual",
+                "fuente": "test",
+                "timestamp": "2026-01-01T00:00:00",
+            }
+        ]
+    ).to_csv(salida, index=False)
+
+    def fake_process(*args, **kwargs):
+        return pd.DataFrame(
+            [
+                {
+                    "id_reporte": "2026-1-1-L2-Producto A-Monto",
+                    "anio": 2026,
+                    "estado": 1,
+                    "mes": 1,
+                    "linea": "L2",
+                    "producto": "Producto A",
+                    "metrica": "Monto",
+                    "valor": 999.0,
+                    "periodicidad": "Mensual",
+                    "fuente": "test",
+                    "timestamp": "2026-01-02T00:00:00",
+                },
+                {
+                    "id_reporte": "2026-2-1-L2-Producto A-Monto",
+                    "anio": 2026,
+                    "estado": 1,
+                    "mes": 2,
+                    "linea": "L2",
+                    "producto": "Producto A",
+                    "metrica": "Monto",
+                    "valor": 200.0,
+                    "periodicidad": "Mensual",
+                    "fuente": "test",
+                    "timestamp": "2026-02-01T00:00:00",
+                },
+            ]
+        )
+
+    import sii_excel_etl
+
+    monkeypatch.setattr(sii_excel_etl, "procesar_archivo_sii_operativo", fake_process)
+
+    sii_excel_etl.ejecutar_concentrado(
+        str(entrada),
+        archivo_salida=str(salida),
+        mover_procesados=False,
+        usar_zona_trabajo=True,
+        ruta_work=str(tmp_path / "datos_work"),
+        ruta_procesados=str(tmp_path / "datos_procesados"),
+        ruta_error=str(tmp_path / "datos_error"),
+    )
+
+    result = pd.read_csv(salida)
+
+    assert len(result) == 2
+    assert set(result["mes"]) == {1, 2}
+    assert result.loc[result["mes"] == 1, "valor"].iloc[0] == 100.0

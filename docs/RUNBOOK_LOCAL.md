@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-47 passed, 1 warning
+59 passed, 1 warning
 ```
 
 El warning conocido de pandas/pyarrow no bloquea.
@@ -79,6 +79,14 @@ curl "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=202
 ```powershell
 curl "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
+
+Notas operativas:
+
+- La API FastAPI no lee directamente del CSV.
+- `/mini-report/json` y `/mini-report/markdown` requieren PostgreSQL/Supabase disponible.
+- La tabla `infonavit_historico` debe existir y estar poblada.
+- La API no ejecuta migraciones.
+- Antes de usar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
 
 ## 5. Construir imagen Docker
 
@@ -166,6 +174,32 @@ outputs/mini_report/mini_report.md
 
 ## 10. Migracion PostgreSQL manual
 
+## 10. Retencion / higiene operativa
+
+Dry-run seguro, sin borrar archivos:
+
+```powershell
+python retention.py --dry-run
+```
+
+Limpieza real, con confirmacion explicita:
+
+```powershell
+python retention.py --run --yes
+```
+
+La retencion solo opera sobre:
+
+- `datos_work/`
+- `datos_error/`
+- `datos_procesados/`
+- `logs/`
+- `logs/runs/`
+
+No toca `datos_entrada/`, `SII_concentrado_v3.csv`, `.env`, `.venv/` ni salidas finales.
+
+## 11. Migracion PostgreSQL manual
+
 El migrador esta protegido contra ejecucion accidental.
 
 No usar:
@@ -186,7 +220,7 @@ Para ejecutar una migracion real, usar confirmacion explicita:
 python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 ```
 
-## 11. Notas de seguridad
+## 12. Notas de seguridad
 
 - No compartir `.env`.
 - No versionar `.env`.

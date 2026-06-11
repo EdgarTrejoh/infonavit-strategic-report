@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import argparse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -134,3 +135,33 @@ def apply_retention_policy() -> list[str]:
         logger.info("Politica de retencion ejecutada sin candidatos vencidos.")
 
     return deleted_or_planned
+
+
+def run_cli(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Ejecuta politica de retencion operativa.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="Lista archivos vencidos sin eliminarlos.")
+    mode.add_argument("--run", action="store_true", help="Ejecuta limpieza real; requiere --yes.")
+    parser.add_argument("--yes", action="store_true", help="Confirma limpieza real cuando se usa --run.")
+    args = parser.parse_args(argv)
+
+    if args.run and not args.yes:
+        parser.error("--run requiere --yes para evitar borrados accidentales.")
+
+    config.RETENTION_ENABLED = True
+    config.RETENTION_DRY_RUN = not args.run
+
+    candidates = apply_retention_policy()
+    action = "Se eliminarian" if config.RETENTION_DRY_RUN else "Eliminados"
+    if not candidates:
+        print("Retention: sin candidatos vencidos.")
+        return 0
+
+    print(f"Retention: {action} {len(candidates)} archivo(s):")
+    for candidate in candidates:
+        print(f"- {candidate}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_cli())

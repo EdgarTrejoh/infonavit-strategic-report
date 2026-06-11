@@ -307,6 +307,18 @@ Comportamiento:
 
 La limpieza se ejecuta al final de `main.py`, pero con la configuracion actual queda deshabilitada.
 
+Ejecucion manual segura:
+
+```powershell
+python retention.py --dry-run
+```
+
+Para limpieza real se requiere confirmacion explicita:
+
+```powershell
+python retention.py --run --yes
+```
+
 ## Pruebas
 
 ## Capa de acceso a datos para mini reporte IA
@@ -321,6 +333,13 @@ Flujo previsto:
 - IA futura: consumira JSON estructurado, no la tabla cruda.
 
 Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
+
+Contratos diferenciados:
+
+- `contract_validator.py`: valida el contrato de ingesta CSV largo.
+- `data_access.py`: valida el contrato `df_master` para API/mini reporte.
+- `report_metrics.py`: consume `df_master` y produce metricas/`ai_context`.
+- `mini_report.py`: consume `ai_context`/JSON estructurado y genera Markdown/JSON.
 
 Validacion de solo lectura Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA:
 
@@ -388,6 +407,14 @@ Endpoints disponibles:
 - `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+
+Dependencia operativa de datos:
+
+- La API FastAPI no lee directamente del CSV.
+- `/mini-report/json` y `/mini-report/markdown` requieren PostgreSQL/Supabase disponible.
+- La tabla `infonavit_historico` debe existir y estar poblada.
+- La API no ejecuta migraciones.
+- Antes de levantar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
 
 ## Preparacion para Cloud Run
 
@@ -474,7 +501,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-56 passed, 1 warning
+59 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.

@@ -50,7 +50,8 @@ configurar_logging()
 logger = logging.getLogger(__name__)
 
 # Ignorar advertencias no críticas
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=UserWarning, module=r"matplotlib\..*")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"matplotlib\..*")
 
 def cargar_configuracion_yaml():
     """Lee config.yaml e inyecta variables en config.py"""
