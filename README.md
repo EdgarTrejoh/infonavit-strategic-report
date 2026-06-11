@@ -525,6 +525,15 @@ El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `
 
 `pytest.ini` filtra warnings deprecados internos de matplotlib/pyparsing para mantener la salida de pruebas legible. El warning de pandas/pyarrow se conserva visible por decision operativa.
 
+## CI GitHub Actions
+
+El repositorio incluye `.github/workflows/ci.yml` para validar automaticamente:
+
+- `python -m pytest -q` con Python 3.11;
+- `docker build -t infonavit-strategic-report-api .`.
+
+El CI corre en `push` a `main` y en `pull_request` hacia `main`. No usa `.env`, no usa secrets, no se conecta a Supabase real, no ejecuta migraciones, no publica imagen Docker y no despliega Cloud Run. El deploy queda como fase manual/controlada posterior. La integracion de OpenAI API queda despues de Cloud Run protegido.
+
 ## Politica de Git
 
 El repositorio debe versionar:

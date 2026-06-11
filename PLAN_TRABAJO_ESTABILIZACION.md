@@ -1377,6 +1377,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Dockerfile y `.dockerignore` creados para despliegue futuro en Cloud Run.
 - Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
 - Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
+- CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1401,7 +1402,6 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Validar politica de retencion en ambiente real antes de activar `enabled: true`.
 - Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
 - Agregar prueba opcional de integracion PostgreSQL.
-- Evaluar CI basico para ejecutar `pytest` en cada cambio.
 - Crear/usar usuario de base de datos de solo lectura para la API.
 - Configurar Secret Manager o variables seguras en Cloud Run.
 - Configurar presupuesto y alertas GCP antes del despliegue.
@@ -1423,14 +1423,14 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Cerrar limpieza de coherencia documental y riesgos tecnicos menores previos a Cloud Run.
-2. Agregar CI basico con `pytest` para cada push o pull request.
-3. Crear usuario DB de solo lectura para la API.
-4. Configurar `INFONAVIT_API_KEY` y `DATABASE_URL` como secretos o variables seguras antes de Cloud Run.
+1. Crear usuario DB de solo lectura para la API.
+2. Configurar `INFONAVIT_API_KEY` y `DATABASE_URL` como secretos o variables seguras antes de Cloud Run.
+3. Validar que GitHub Actions pase en `main`.
+4. Ejecutar una prueba Docker local final antes del deploy controlado.
 
 ### Preparacion productiva
 
-5. Ejecutar deploy controlado en Cloud Run solo despues de presupuesto, limites de instancia, Secret Manager y control de acceso.
+5. Ejecutar deploy controlado en Cloud Run solo despues de presupuesto, limites de instancia, Secret Manager, usuario DB read-only y control de acceso.
 6. Mantener validacion local con:
 
 ```text
@@ -1444,4 +1444,4 @@ python -m pytest -q
 8. Evaluar prueba opcional de integracion PostgreSQL.
 9. Evaluar runner/CLI/frontend operativo para usuarios no tecnicos.
 10. Evaluar politica de almacenamiento externo para PDFs y PNGs generados.
-11. Integrar IA solo despues de estabilizar API, control de acceso y contrato de datos.
+11. Integrar OpenAI API solo despues de Cloud Run protegido, API estable y contrato de datos validado.
