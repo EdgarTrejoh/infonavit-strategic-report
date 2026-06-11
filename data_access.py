@@ -61,22 +61,19 @@ def validate_df_master_contract(df: pd.DataFrame) -> None:
 
 
 def load_df_master_from_db(engine, start_year: int | None = None, end_year: int | None = None) -> pd.DataFrame:
-    conditions = ["metrica = :metrica_monto"]
-    params = {"metrica_monto": METRICA_MONTO}
-
-    if start_year is not None:
-        conditions.append("anio >= :start_year")
-        params["start_year"] = int(start_year)
-    if end_year is not None:
-        conditions.append("anio <= :end_year")
-        params["end_year"] = int(end_year)
-
     query = text(
-        f"""
+        """
         SELECT anio, mes, estado, linea, producto, metrica, valor
         FROM infonavit_historico
-        WHERE {" AND ".join(conditions)}
+        WHERE metrica = :metrica_monto
+          AND (:start_year IS NULL OR anio >= :start_year)
+          AND (:end_year IS NULL OR anio <= :end_year)
         """
     )
+    params = {
+        "metrica_monto": METRICA_MONTO,
+        "start_year": int(start_year) if start_year is not None else None,
+        "end_year": int(end_year) if end_year is not None else None,
+    }
     raw_df = pd.read_sql_query(query, engine, params=params)
     return build_df_master_from_long_table(raw_df)

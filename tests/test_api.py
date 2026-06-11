@@ -71,11 +71,22 @@ def _patch_report_flow(monkeypatch):
     )
 
 
+def _assert_no_sensitive_error_details(text):
+    assert "DATABASE_URL" not in text
+    assert "DB_PASSWORD" not in text
+    assert "password" not in text
+    assert "psycopg2" not in text
+    assert "SQLAlchemy" not in text
+    assert "Traceback" not in text
+    assert "connection string" not in text.lower()
+
+
 def test_health_returns_ok():
     response = _client().get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "infonavit-strategic-report-api"}
+    assert response.headers["X-Request-ID"]
 
 
 def test_db_health_does_not_expose_credentials(monkeypatch):
@@ -88,6 +99,7 @@ def test_db_health_does_not_expose_credentials(monkeypatch):
     response = _client().get("/db/health")
 
     assert response.status_code == 200
+    assert response.headers["X-Request-ID"]
     payload = response.json()
     assert payload["status"] == "error"
     assert payload["database"] == "unavailable"
@@ -102,6 +114,7 @@ def test_mini_report_json_returns_expected_structure(monkeypatch):
     response = _client().get("/mini-report/json?current_year=2026&previous_year=2025")
 
     assert response.status_code == 200
+    assert response.headers["X-Request-ID"]
     payload = response.json()
     assert payload["title"] == "Mini reporte ejecutivo INFONAVIT"
     assert [section["id"] for section in payload["sections"]] == [
@@ -119,6 +132,7 @@ def test_mini_report_markdown_returns_plain_text(monkeypatch):
     response = _client().get("/mini-report/markdown")
 
     assert response.status_code == 200
+    assert response.headers["X-Request-ID"]
     assert response.headers["content-type"].startswith("text/plain")
     assert "Mini reporte ejecutivo INFONAVIT" in response.text
     assert "Resumen YTD comparable" in response.text
@@ -135,3 +149,63 @@ def test_mini_report_json_does_not_save_files(monkeypatch, tmp_path):
     after = set(output_dir.glob("*")) if output_dir.exists() else set()
     assert response.status_code == 200
     assert after == before
+
+
+def test_mini_report_json_rejects_month_limit_above_range(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json?month_limit=13")
+
+    assert response.status_code == 422
+
+
+def test_mini_report_json_rejects_month_limit_below_range(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json?month_limit=0")
+
+    assert response.status_code == 422
+
+
+def test_mini_report_json_rejects_current_year_out_of_range(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json?current_year=1999")
+
+    assert response.status_code == 422
+
+
+def test_mini_report_json_rejects_previous_year_greater_than_current_year(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json?current_year=2025&previous_year=2026")
+
+    assert response.status_code == 422
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_json_rejects_start_year_greater_than_end_year(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json?start_year=2026&end_year=2025")
+
+    assert response.status_code == 422
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_markdown_applies_same_year_validation(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/markdown?current_year=2025&previous_year=2026")
+
+    assert response.status_code == 422
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_markdown_rejects_invalid_month_limit(monkeypatch):
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/markdown?month_limit=13")
+
+    assert response.status_code == 422
+    _assert_no_sensitive_error_details(response.text)

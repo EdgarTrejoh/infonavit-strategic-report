@@ -1260,6 +1260,36 @@ Pendientes antes de desplegar:
 - validar endpoint publico;
 - monitorear costo y latencia.
 
+## Preparacion Cloud Run y seguridad API
+
+Se agrego el checklist `docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md` para despliegue futuro.
+
+- Cloud Run sera el destino preferente futuro de la API.
+- La API sigue siendo solo lectura.
+- No se desplego todavia.
+- Se documento checklist de despliegue con control de gasto.
+- Se reviso prevencion basica de SQL injection.
+- Se agregaron validaciones de parametros HTTP.
+- Los secretos deben ir en Secret Manager o variables seguras de Cloud Run.
+
+Pendientes:
+
+- autenticacion/API key;
+- deploy real Docker/Cloud Run;
+- presupuesto y alertas GCP;
+- limites de instancia;
+- monitoreo de latencia/costo.
+
+## Operational readiness antes de Cloud Run
+
+| Tema | Estado actual | Pendientes | Prioridad |
+|---|---|---|---|
+| Idempotencia | La migracion usa `id_reporte` y upsert; el migrador tiene CLI segura; Supabase fue validado sin duplicados. | Agregar dry-run formal de migracion con resumen; manifest de migracion; reporte de filas insertadas/actualizadas; validacion automatica de rangos de anio antes de migrar si se formaliza. | Media antes de produccion real; no bloquea demo/API local. |
+| Observabilidad | Logs basicos; health checks; tests; manifests ETL; API con `request_id`, header `X-Request-ID`, duracion por request y tiempos internos de mini reporte. | Logs estructurados JSON para Cloud Run; metricas por endpoint; alertas por error rate; monitoreo p95/p99; trazabilidad por `request_id` en Cloud Logging. | Alta antes de exponer publicamente. |
+| Redundancia / recuperacion | Datos locales; Supabase como fuente remota; repo GitHub; outputs locales ignorados. | Politica de backup Supabase; export periodico; prueba de restore; estrategia si Supabase falla; posible modo degradado de API. | Media para demo; alta para produccion real. |
+| Latencia | API responde local y en Docker; mini reporte desde Supabase funciona; se agregan logs de `db_ms`, `metrics_ms`, `render_ms` y `total_ms`. | Medir historico de tiempos; definir umbrales aceptables; evaluar cache si latencia crece o costo aumenta. | Media antes de Cloud Run; alta si endpoint tarda demasiado o hay costo elevado. |
+| Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`. | API key por header; autenticacion/autorizacion formal; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
+
 Prueba real de punta a punta:
 
 ```text
@@ -1337,7 +1367,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `47 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `54 passed, 1 warning`.
 
 ### Pendientes reales
 

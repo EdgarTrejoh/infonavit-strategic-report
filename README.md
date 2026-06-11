@@ -419,6 +419,37 @@ Antes de desplegar:
 - validar endpoint publico;
 - monitorear costo y latencia.
 
+## Preparacion Cloud Run y seguridad API
+
+Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md) para despliegue futuro.
+
+- Cloud Run sera el destino preferente futuro de la API.
+- La API sigue siendo solo lectura.
+- No se desplego todavia.
+- Se documento checklist de despliegue con control de gasto.
+- Se reviso prevencion basica de SQL injection.
+- Se agregaron validaciones de parametros HTTP.
+- Los secretos deben ir en Secret Manager o variables seguras de Cloud Run.
+
+Pendientes:
+
+- autenticacion/API key;
+- deploy real Docker/Cloud Run;
+- presupuesto y alertas GCP;
+- limites de instancia;
+- monitoreo de latencia/costo.
+
+## Observabilidad y seguridad operativa de la API
+
+- La API genera un `request_id` por peticion y lo regresa en el header `X-Request-ID`.
+- La API registra metodo HTTP, path, status code, duracion de la peticion y `request_id`.
+- Los endpoints de mini reporte registran duraciones internas aproximadas: carga desde DB, calculo de metricas, render de mini reporte y total.
+- Los endpoints de mini reporte siguen siendo de solo lectura.
+- Los parametros HTTP se validan antes de ejecutar consultas.
+- No se permite SQL libre desde la API.
+- No se registran credenciales, `DATABASE_URL`, `DB_PASSWORD` ni connection strings.
+- Cloud Run requiere configuracion posterior de Secret Manager, presupuesto, limites de instancia y control de acceso.
+
 Ejecutar:
 
 ```powershell
@@ -443,7 +474,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-47 passed, 1 warning
+54 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 from data_access import load_df_master_from_db, validate_df_master_contract
@@ -17,6 +19,27 @@ SERVICE_NAME = "infonavit-strategic-report-api"
 SAFE_DB_ERROR = "No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."
 
 app = FastAPI(title="INFONAVIT Strategic Report API", version="0.1.0")
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    started_at = time.perf_counter()
+
+    response = await call_next(request)
+
+    duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "API request completed method=%s path=%s status_code=%s duration_ms=%s request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
+    return response
 
 
 @app.get("/health")
@@ -36,27 +59,58 @@ def database_health():
     }
 
 
+def _validate_report_params(
+    current_year: int,
+    previous_year: int,
+    start_year: int | None,
+    end_year: int | None,
+) -> None:
+    if previous_year > current_year:
+        raise HTTPException(status_code=422, detail="previous_year no debe ser mayor que current_year.")
+    if start_year is not None and end_year is not None and start_year > end_year:
+        raise HTTPException(status_code=422, detail="start_year no debe ser mayor que end_year.")
+
+
 def _build_report(
     current_year: int,
     previous_year: int,
     month_limit: int | None,
     start_year: int | None,
     end_year: int | None,
+    request_id: str | None = None,
 ) -> tuple[dict, str]:
     if engine is None:
         raise HTTPException(status_code=503, detail=SAFE_DB_ERROR)
 
     try:
+        total_start = time.perf_counter()
+        db_start = time.perf_counter()
         df_master = load_df_master_from_db(engine, start_year=start_year, end_year=end_year)
         validate_df_master_contract(df_master)
+        db_ms = round((time.perf_counter() - db_start) * 1000, 2)
+
+        metrics_start = time.perf_counter()
         ai_context = build_ai_context(
             df_master,
             current_year=current_year,
             previous_year=previous_year,
             month_limit=month_limit,
         )
+        metrics_ms = round((time.perf_counter() - metrics_start) * 1000, 2)
+
+        render_start = time.perf_counter()
         report_json, markdown = generate_mini_report(ai_context, output_dir=None)
         json.dumps(report_json, ensure_ascii=False)
+        render_ms = round((time.perf_counter() - render_start) * 1000, 2)
+        total_ms = round((time.perf_counter() - total_start) * 1000, 2)
+        logger.info(
+            "mini_report_pipeline db_ms=%s metrics_ms=%s render_ms=%s total_ms=%s request_id=%s",
+            db_ms,
+            metrics_ms,
+            render_ms,
+            total_ms,
+            request_id,
+        )
         return report_json, markdown
     except HTTPException:
         raise
@@ -67,35 +121,41 @@ def _build_report(
 
 @app.get("/mini-report/json")
 def mini_report_json(
-    current_year: int = Query(2026),
-    previous_year: int = Query(2025),
+    request: Request,
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
     month_limit: int | None = Query(None, ge=1, le=12),
-    start_year: int | None = Query(None),
-    end_year: int | None = Query(None),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
 ):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
     report_json, _ = _build_report(
         current_year=current_year,
         previous_year=previous_year,
         month_limit=month_limit,
         start_year=start_year,
         end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
     )
     return report_json
 
 
 @app.get("/mini-report/markdown", response_class=PlainTextResponse)
 def mini_report_markdown(
-    current_year: int = Query(2026),
-    previous_year: int = Query(2025),
+    request: Request,
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
     month_limit: int | None = Query(None, ge=1, le=12),
-    start_year: int | None = Query(None),
-    end_year: int | None = Query(None),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
 ):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
     _, markdown = _build_report(
         current_year=current_year,
         previous_year=previous_year,
         month_limit=month_limit,
         start_year=start_year,
         end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
     )
     return markdown
