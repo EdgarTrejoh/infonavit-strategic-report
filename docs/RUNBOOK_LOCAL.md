@@ -1,0 +1,198 @@
+# Runbook Local - Proyecto INFONAVIT
+
+Este runbook documenta comandos operativos para validar el proyecto en entorno local. Ejecutar los comandos desde la raiz del repositorio.
+
+## 1. Activar entorno
+
+```powershell
+.\.venv\Scripts\activate
+```
+
+## 2. Ejecutar tests
+
+```powershell
+python -m pytest -q
+```
+
+Resultado esperado actual:
+
+```text
+47 passed, 1 warning
+```
+
+El warning conocido de pandas/pyarrow no bloquea.
+
+## 3. Levantar API local con uvicorn
+
+```powershell
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8080 --reload
+```
+
+La API queda disponible en:
+
+```text
+http://127.0.0.1:8080
+```
+
+Para detenerla, usar `Ctrl+C`.
+
+## 4. Probar endpoints con curl
+
+### Health de servicio
+
+```powershell
+curl http://127.0.0.1:8080/health
+```
+
+Respuesta esperada:
+
+```json
+{"status":"ok","service":"infonavit-strategic-report-api"}
+```
+
+### Health de base de datos
+
+```powershell
+curl http://127.0.0.1:8080/db/health
+```
+
+Si `DATABASE_URL` esta disponible y la base responde:
+
+```json
+{"status":"ok","database":"available"}
+```
+
+Si no hay credenciales o la base no responde, debe fallar de forma controlada:
+
+```json
+{"status":"error","database":"unavailable","message":"No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."}
+```
+
+### Mini reporte JSON
+
+```powershell
+curl "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
+### Mini reporte Markdown
+
+```powershell
+curl "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
+## 5. Construir imagen Docker
+
+```powershell
+docker build -t infonavit-strategic-report-api .
+```
+
+## 6. Ejecutar contenedor sin `.env`
+
+```powershell
+docker run --rm --name infonavit-api-local -p 8080:8080 infonavit-strategic-report-api
+```
+
+En otro PowerShell:
+
+```powershell
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/db/health
+```
+
+Sin `.env`, `/health` debe responder OK y `/db/health` debe fallar controladamente sin exponer credenciales.
+
+## 7. Ejecutar contenedor con `.env`
+
+```powershell
+docker run --rm --name infonavit-api-local -p 8080:8080 --env-file .env infonavit-strategic-report-api
+```
+
+En otro PowerShell:
+
+```powershell
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/db/health
+curl "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+curl "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
+## 8. Detener contenedor
+
+Si el contenedor se ejecuto con `--rm`, detenerlo con:
+
+```powershell
+docker stop infonavit-api-local
+```
+
+Si queda un contenedor detenido con el mismo nombre:
+
+```powershell
+docker rm -f infonavit-api-local
+```
+
+## 9. Generar mini reporte local desde Supabase
+
+Este comando lee Supabase/PostgreSQL, construye `df_master`, genera contexto analitico y guarda salidas locales en `outputs/mini_report/`.
+
+```powershell
+@'
+import json
+from database import engine
+from data_access import load_df_master_from_db, validate_df_master_contract
+from report_metrics import build_ai_context
+from mini_report import generate_mini_report
+
+df_master = load_df_master_from_db(engine, start_year=2025, end_year=2026)
+validate_df_master_contract(df_master)
+
+ai_context = build_ai_context(df_master, current_year=2026, previous_year=2025)
+report_json, markdown = generate_mini_report(ai_context, output_dir="outputs/mini_report")
+json.dumps(report_json, ensure_ascii=False)
+
+print("filas_leidas=", len(df_master))
+print("fecha_min=", df_master["fecha"].min().date())
+print("fecha_max=", df_master["fecha"].max().date())
+print("json_serializable=ok")
+print("markdown_generado=ok")
+'@ | python -
+```
+
+Archivos esperados:
+
+```text
+outputs/mini_report/mini_report.json
+outputs/mini_report/mini_report.md
+```
+
+## 10. Migracion PostgreSQL manual
+
+El migrador esta protegido contra ejecucion accidental.
+
+No usar:
+
+```powershell
+python migrate_csv_to_pg.py
+```
+
+Para ver ayuda:
+
+```powershell
+python migrate_csv_to_pg.py --help
+```
+
+Para ejecutar una migracion real, usar confirmacion explicita:
+
+```powershell
+python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
+```
+
+## 11. Notas de seguridad
+
+- No compartir `.env`.
+- No versionar `.env`.
+- No imprimir `DATABASE_URL`.
+- No imprimir usuario, password, host completo ni connection string.
+- No ejecutar migraciones por accidente.
+- Confirmar que `DATABASE_URL` apunta al ambiente correcto antes de cualquier operacion.
+- Usar Secret Manager o variables seguras de Cloud Run en despliegues futuros.
+- No subir CSV, Excel, PDF, PNG, logs ni artefactos generados al repositorio.
