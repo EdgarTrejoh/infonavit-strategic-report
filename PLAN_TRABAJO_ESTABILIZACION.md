@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `59 passed, 1 warning`.
+- Estado vigente de pruebas: `66 passed, 1 warning`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1241,9 +1241,9 @@ La carpeta `api/` expone una primera API local de solo lectura para el mini repo
 Endpoints disponibles:
 
 - `GET /health`: estado del servicio, sin tocar Supabase.
-- `GET /db/health`: health check seguro de PostgreSQL/Supabase.
-- `GET /mini-report/json`: genera mini reporte JSON en memoria.
-- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano.
+- `GET /db/health`: health check seguro de PostgreSQL/Supabase; requiere `X-API-Key`.
+- `GET /mini-report/json`: genera mini reporte JSON en memoria; requiere `X-API-Key`.
+- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
@@ -1285,11 +1285,12 @@ Se agrego el checklist `docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md` para despliegue 
 - Se documento checklist de despliegue con control de gasto.
 - Se reviso prevencion basica de SQL injection.
 - Se agregaron validaciones de parametros HTTP.
+- Se agrego seguridad minima por header `X-API-Key` para endpoints operativos.
 - Los secretos deben ir en Secret Manager o variables seguras de Cloud Run.
 
 Pendientes:
 
-- autenticacion/API key;
+- autenticacion formal si se expone a usuarios externos;
 - deploy real Docker/Cloud Run;
 - presupuesto y alertas GCP;
 - limites de instancia;
@@ -1303,7 +1304,7 @@ Pendientes:
 | Observabilidad | Logs basicos; health checks; tests; manifests ETL; API con `request_id`, header `X-Request-ID`, duracion por request y tiempos internos de mini reporte. | Logs estructurados JSON para Cloud Run; metricas por endpoint; alertas por error rate; monitoreo p95/p99; trazabilidad por `request_id` en Cloud Logging. | Alta antes de exponer publicamente. |
 | Redundancia / recuperacion | Datos locales; Supabase como fuente remota; repo GitHub; outputs locales ignorados. | Politica de backup Supabase; export periodico; prueba de restore; estrategia si Supabase falla; posible modo degradado de API. | Media para demo; alta para produccion real. |
 | Latencia | API responde local y en Docker; mini reporte desde Supabase funciona; se agregan logs de `db_ms`, `metrics_ms`, `render_ms` y `total_ms`. | Medir historico de tiempos; definir umbrales aceptables; evaluar cache si latencia crece o costo aumenta. | Media antes de Cloud Run; alta si endpoint tarda demasiado o hay costo elevado. |
-| Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`. | API key por header; autenticacion/autorizacion formal; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
+| Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`; endpoints operativos protegidos con `X-API-Key`. | Autenticacion/autorizacion formal si se expone a usuarios externos; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
 
 Prueba real de punta a punta:
 
@@ -1375,6 +1376,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - API FastAPI solo lectura implementada y validada localmente.
 - Dockerfile y `.dockerignore` creados para despliegue futuro en Cloud Run.
 - Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
+- Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1385,7 +1387,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `59 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `66 passed, 1 warning`.
 
 ### Pendientes reales
 
@@ -1400,7 +1402,6 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
 - Agregar prueba opcional de integracion PostgreSQL.
 - Evaluar CI basico para ejecutar `pytest` en cada cambio.
-- Definir control de acceso de API antes de Cloud Run, por ejemplo API key por header.
 - Crear/usar usuario de base de datos de solo lectura para la API.
 - Configurar Secret Manager o variables seguras en Cloud Run.
 - Configurar presupuesto y alertas GCP antes del despliegue.
@@ -1424,8 +1425,8 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 1. Cerrar limpieza de coherencia documental y riesgos tecnicos menores previos a Cloud Run.
 2. Agregar CI basico con `pytest` para cada push o pull request.
-3. Definir control de acceso de API antes de Cloud Run, por ejemplo API key por header.
-4. Crear usuario DB de solo lectura para la API.
+3. Crear usuario DB de solo lectura para la API.
+4. Configurar `INFONAVIT_API_KEY` y `DATABASE_URL` como secretos o variables seguras antes de Cloud Run.
 
 ### Preparacion productiva
 

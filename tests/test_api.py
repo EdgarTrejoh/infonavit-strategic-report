@@ -5,9 +5,19 @@ from fastapi.testclient import TestClient
 
 import api.main as api_main
 
+TEST_API_KEY = "test-api-key"
+
 
 def _client():
     return TestClient(api_main.app)
+
+
+def _auth_headers():
+    return {"X-API-Key": TEST_API_KEY}
+
+
+def _configure_api_key(monkeypatch):
+    monkeypatch.setenv("INFONAVIT_API_KEY", TEST_API_KEY)
 
 
 def _fake_df_master():
@@ -72,6 +82,7 @@ def _patch_report_flow(monkeypatch):
 
 
 def _assert_no_sensitive_error_details(text):
+    assert "INFONAVIT_API_KEY" not in text
     assert "DATABASE_URL" not in text
     assert "DB_PASSWORD" not in text
     assert "password" not in text
@@ -90,13 +101,14 @@ def test_health_returns_ok():
 
 
 def test_db_health_does_not_expose_credentials(monkeypatch):
+    _configure_api_key(monkeypatch)
     monkeypatch.setattr(
         api_main,
         "health_check",
         lambda: (False, "postgresql://user:password@example.com/db"),
     )
 
-    response = _client().get("/db/health")
+    response = _client().get("/db/health", headers=_auth_headers())
 
     assert response.status_code == 200
     assert response.headers["X-Request-ID"]
@@ -108,10 +120,39 @@ def test_db_health_does_not_expose_credentials(monkeypatch):
     assert "example.com" not in str(payload)
 
 
+def test_db_health_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+
+    response = _client().get("/db/health")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_db_health_returns_ok_with_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "health_check", lambda: (True, "Conexion PostgreSQL disponible."))
+
+    response = _client().get("/db/health", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "database": "available"}
+
+
+def test_protected_endpoint_fails_if_server_api_key_is_not_configured(monkeypatch):
+    monkeypatch.delenv("INFONAVIT_API_KEY", raising=False)
+
+    response = _client().get("/mini-report/json", headers=_auth_headers())
+
+    assert response.status_code == 503
+    _assert_no_sensitive_error_details(response.text)
+
+
 def test_mini_report_json_returns_expected_structure(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?current_year=2026&previous_year=2025")
+    response = _client().get("/mini-report/json?current_year=2026&previous_year=2025", headers=_auth_headers())
 
     assert response.status_code == 200
     assert response.headers["X-Request-ID"]
@@ -126,10 +167,51 @@ def test_mini_report_json_returns_expected_structure(monkeypatch):
     ]
 
 
-def test_mini_report_markdown_returns_plain_text(monkeypatch):
+def test_mini_report_json_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_markdown_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
     response = _client().get("/mini-report/markdown")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_json_rejects_invalid_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/json", headers={"X-API-Key": "wrong"})
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_markdown_rejects_invalid_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/markdown", headers={"X-API-Key": "wrong"})
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_markdown_returns_plain_text(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/markdown", headers=_auth_headers())
 
     assert response.status_code == 200
     assert response.headers["X-Request-ID"]
@@ -140,11 +222,12 @@ def test_mini_report_markdown_returns_plain_text(monkeypatch):
 
 
 def test_mini_report_json_does_not_save_files(monkeypatch, tmp_path):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
     output_dir = Path("outputs/mini_report")
     before = set(output_dir.glob("*")) if output_dir.exists() else set()
 
-    response = _client().get("/mini-report/json")
+    response = _client().get("/mini-report/json", headers=_auth_headers())
 
     after = set(output_dir.glob("*")) if output_dir.exists() else set()
     assert response.status_code == 200
@@ -152,60 +235,73 @@ def test_mini_report_json_does_not_save_files(monkeypatch, tmp_path):
 
 
 def test_mini_report_json_rejects_month_limit_above_range(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?month_limit=13")
+    response = _client().get("/mini-report/json?month_limit=13", headers=_auth_headers())
 
     assert response.status_code == 422
 
 
 def test_mini_report_json_rejects_month_limit_below_range(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?month_limit=0")
+    response = _client().get("/mini-report/json?month_limit=0", headers=_auth_headers())
 
     assert response.status_code == 422
 
 
 def test_mini_report_json_rejects_current_year_out_of_range(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?current_year=1999")
+    response = _client().get("/mini-report/json?current_year=1999", headers=_auth_headers())
 
     assert response.status_code == 422
 
 
 def test_mini_report_json_rejects_previous_year_greater_than_current_year(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?current_year=2025&previous_year=2026")
+    response = _client().get(
+        "/mini-report/json?current_year=2025&previous_year=2026",
+        headers=_auth_headers(),
+    )
 
     assert response.status_code == 422
     _assert_no_sensitive_error_details(response.text)
 
 
 def test_mini_report_json_rejects_start_year_greater_than_end_year(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/json?start_year=2026&end_year=2025")
+    response = _client().get("/mini-report/json?start_year=2026&end_year=2025", headers=_auth_headers())
 
     assert response.status_code == 422
     _assert_no_sensitive_error_details(response.text)
 
 
 def test_mini_report_markdown_applies_same_year_validation(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/markdown?current_year=2025&previous_year=2026")
+    response = _client().get(
+        "/mini-report/markdown?current_year=2025&previous_year=2026",
+        headers=_auth_headers(),
+    )
 
     assert response.status_code == 422
     _assert_no_sensitive_error_details(response.text)
 
 
 def test_mini_report_markdown_rejects_invalid_month_limit(monkeypatch):
+    _configure_api_key(monkeypatch)
     _patch_report_flow(monkeypatch)
 
-    response = _client().get("/mini-report/markdown?month_limit=13")
+    response = _client().get("/mini-report/markdown?month_limit=13", headers=_auth_headers())
 
     assert response.status_code == 422
     _assert_no_sensitive_error_details(response.text)

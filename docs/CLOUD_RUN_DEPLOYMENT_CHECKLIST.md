@@ -30,24 +30,26 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 ## 3. Variables y secretos
 
 - `DATABASE_URL` no debe ir en Git.
+- `INFONAVIT_API_KEY` no debe ir en Git.
 - No usar `.env` en produccion.
 - Usar Secret Manager o variables seguras de Cloud Run.
 - No imprimir `DATABASE_URL`.
 - No imprimir `DB_PASSWORD`.
+- No imprimir `INFONAVIT_API_KEY`.
 - No imprimir connection strings.
 - No pegar credenciales en README, Notion, issues, tickets ni logs.
 
 ## 4. Endpoints a validar en Cloud Run
 
 - `GET /health`
-- `GET /db/health`
-- `GET /mini-report/json`
-- `GET /mini-report/markdown`
+- `GET /db/health` con header `X-API-Key`
+- `GET /mini-report/json` con header `X-API-Key`
+- `GET /mini-report/markdown` con header `X-API-Key`
 
 ## 5. Seguridad minima antes de exponer publicamente
 
 - No exponer publicamente sin control.
-- Evaluar API key por header, por ejemplo `X-API-Key`.
+- Usar API key por header `X-API-Key` para endpoints operativos.
 - Documentar que la API es solo lectura.
 - No habilitar endpoints de escritura.
 - No habilitar migraciones desde API.
@@ -98,15 +100,16 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `pytest` pasa.
 - [ ] Docker local pasa.
 - [ ] `/health` local pasa.
-- [ ] `/db/health` local pasa.
-- [ ] `/mini-report/json` local pasa.
-- [ ] `/mini-report/markdown` local pasa.
+- [ ] `/db/health` local pasa con `X-API-Key`.
+- [ ] `/mini-report/json` local pasa con `X-API-Key`.
+- [ ] `/mini-report/markdown` local pasa con `X-API-Key`.
 - [ ] `.env` no versionado.
 - [ ] `DATABASE_URL` configurado como secreto.
+- [ ] `INFONAVIT_API_KEY` configurado como secreto.
 - [ ] Presupuesto GCP configurado.
 - [ ] Alertas GCP configuradas.
 - [ ] Limite de instancias definido.
-- [ ] Seguridad minima definida.
+- [ ] Seguridad minima por `X-API-Key` validada.
 - [ ] Revision de parametros API completada.
 - [ ] Revision de SQL injection completada.
 - [ ] Usuario de base con permisos minimos definido.

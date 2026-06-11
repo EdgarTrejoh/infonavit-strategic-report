@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import secrets
 import time
 import uuid
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 from data_access import load_df_master_from_db, validate_df_master_contract
@@ -17,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 SERVICE_NAME = "infonavit-strategic-report-api"
 SAFE_DB_ERROR = "No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."
+SAFE_AUTH_ERROR = "API key requerida o invalida."
+SAFE_AUTH_CONFIG_ERROR = "API key del servidor no configurada."
 
 app = FastAPI(title="INFONAVIT Strategic Report API", version="0.1.0")
 
@@ -47,8 +51,16 @@ def health():
     return {"status": "ok", "service": SERVICE_NAME}
 
 
+def require_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
+    expected_api_key = os.getenv("INFONAVIT_API_KEY")
+    if not expected_api_key:
+        raise HTTPException(status_code=503, detail=SAFE_AUTH_CONFIG_ERROR)
+    if not x_api_key or not secrets.compare_digest(x_api_key, expected_api_key):
+        raise HTTPException(status_code=401, detail=SAFE_AUTH_ERROR)
+
+
 @app.get("/db/health")
-def database_health():
+def database_health(_: None = Depends(require_api_key)):
     ok, message = health_check()
     if ok:
         return {"status": "ok", "database": "available"}
@@ -122,6 +134,7 @@ def _build_report(
 @app.get("/mini-report/json")
 def mini_report_json(
     request: Request,
+    _: None = Depends(require_api_key),
     current_year: int = Query(2026, ge=2000, le=2100),
     previous_year: int = Query(2025, ge=2000, le=2100),
     month_limit: int | None = Query(None, ge=1, le=12),
@@ -143,6 +156,7 @@ def mini_report_json(
 @app.get("/mini-report/markdown", response_class=PlainTextResponse)
 def mini_report_markdown(
     request: Request,
+    _: None = Depends(require_api_key),
     current_year: int = Query(2026, ge=2000, le=2100),
     previous_year: int = Query(2025, ge=2000, le=2100),
     month_limit: int | None = Query(None, ge=1, le=12),

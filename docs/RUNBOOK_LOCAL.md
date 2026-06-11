@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-59 passed, 1 warning
+66 passed, 1 warning
 ```
 
 El warning conocido de pandas/pyarrow no bloquea.
@@ -53,7 +53,8 @@ Respuesta esperada:
 ### Health de base de datos
 
 ```powershell
-curl http://127.0.0.1:8080/db/health
+$env:INFONAVIT_API_KEY="change_me_local_only"
+curl -H "X-API-Key: change_me_local_only" http://127.0.0.1:8080/db/health
 ```
 
 Si `DATABASE_URL` esta disponible y la base responde:
@@ -71,18 +72,21 @@ Si no hay credenciales o la base no responde, debe fallar de forma controlada:
 ### Mini reporte JSON
 
 ```powershell
-curl "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
 
 ### Mini reporte Markdown
 
 ```powershell
-curl "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
 
 Notas operativas:
 
 - La API FastAPI no lee directamente del CSV.
+- `/health` permanece publico.
+- `/db/health`, `/mini-report/json` y `/mini-report/markdown` requieren header `X-API-Key`.
+- La variable `INFONAVIT_API_KEY` debe estar configurada en `.env`, PowerShell o variable segura del entorno.
 - `/mini-report/json` y `/mini-report/markdown` requieren PostgreSQL/Supabase disponible.
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
@@ -107,7 +111,7 @@ curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/db/health
 ```
 
-Sin `.env`, `/health` debe responder OK y `/db/health` debe fallar controladamente sin exponer credenciales.
+Sin `.env`, `/health` debe responder OK y `/db/health` debe fallar controladamente porque falta `INFONAVIT_API_KEY`, sin exponer credenciales.
 
 ## 7. Ejecutar contenedor con `.env`
 
@@ -119,9 +123,9 @@ En otro PowerShell:
 
 ```powershell
 curl http://127.0.0.1:8080/health
-curl http://127.0.0.1:8080/db/health
-curl "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
-curl "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+curl -H "X-API-Key: change_me_local_only" http://127.0.0.1:8080/db/health
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
 
 ## 8. Detener contenedor
@@ -225,6 +229,7 @@ python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 - No compartir `.env`.
 - No versionar `.env`.
 - No imprimir `DATABASE_URL`.
+- No imprimir ni compartir `INFONAVIT_API_KEY`.
 - No imprimir usuario, password, host completo ni connection string.
 - No ejecutar migraciones por accidente.
 - Confirmar que `DATABASE_URL` apunta al ambiente correcto antes de cualquier operacion.

@@ -402,9 +402,9 @@ La carpeta `api/` expone una primera API local de solo lectura para el mini repo
 Endpoints disponibles:
 
 - `GET /health`: estado del servicio, sin tocar Supabase.
-- `GET /db/health`: health check seguro de PostgreSQL/Supabase.
-- `GET /mini-report/json`: genera mini reporte JSON en memoria.
-- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano.
+- `GET /db/health`: health check seguro de PostgreSQL/Supabase; requiere `X-API-Key`.
+- `GET /mini-report/json`: genera mini reporte JSON en memoria; requiere `X-API-Key`.
+- `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
@@ -415,6 +415,22 @@ Dependencia operativa de datos:
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
 - Antes de levantar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
+
+Seguridad minima:
+
+- `/health` permanece publico.
+- `/db/health`, `/mini-report/json` y `/mini-report/markdown` requieren header `X-API-Key`.
+- La key se configura con la variable `INFONAVIT_API_KEY`.
+- En local puede definirse en `.env` o en la sesion de PowerShell.
+- En Cloud Run debe configurarse con Secret Manager o variable segura.
+- Nunca versionar, compartir ni registrar la API key.
+
+Ejemplo local sin valor real:
+
+```powershell
+$env:INFONAVIT_API_KEY="change_me_local_only"
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025"
+```
 
 ## Preparacion para Cloud Run
 
@@ -456,11 +472,12 @@ Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_D
 - Se documento checklist de despliegue con control de gasto.
 - Se reviso prevencion basica de SQL injection.
 - Se agregaron validaciones de parametros HTTP.
+- Se agrego proteccion por header `X-API-Key` para endpoints operativos.
 - Los secretos deben ir en Secret Manager o variables seguras de Cloud Run.
 
 Pendientes:
 
-- autenticacion/API key;
+- autenticacion formal si se expone a usuarios externos;
 - deploy real Docker/Cloud Run;
 - presupuesto y alertas GCP;
 - limites de instancia;
@@ -501,7 +518,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-59 passed, 1 warning
+66 passed, 1 warning
 ```
 
 El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.
