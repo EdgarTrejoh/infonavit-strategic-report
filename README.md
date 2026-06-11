@@ -389,6 +389,36 @@ Endpoints disponibles:
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
+## Preparacion para Cloud Run
+
+El proyecto incluye `Dockerfile` y `.dockerignore` para contenerizar la API FastAPI.
+
+Comandos locales:
+
+```powershell
+docker build -t infonavit-strategic-report-api .
+docker run --rm -p 8080:8080 infonavit-strategic-report-api
+curl http://127.0.0.1:8080/health
+```
+
+Para probar con Supabase localmente, usar variables de entorno sin imprimir credenciales:
+
+```powershell
+docker run --rm -p 8080:8080 --env-file .env infonavit-strategic-report-api
+```
+
+No se ha desplegado todavia en Google Cloud. Cloud Run queda como destino preferente futuro por escalado a cero y control de gasto. Las variables sensibles deben configurarse mediante Secret Manager o variables seguras de Cloud Run, nunca en Git.
+
+Antes de desplegar:
+
+- configurar presupuesto y alertas en GCP;
+- definir autenticacion;
+- definir limites de instancia;
+- configurar Secret Manager;
+- construir y desplegar imagen;
+- validar endpoint publico;
+- monitorear costo y latencia.
+
 Ejecutar:
 
 ```powershell
