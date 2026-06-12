@@ -2,10 +2,13 @@ import json
 
 import pandas as pd
 import pytest
+from sqlalchemy import create_engine, text
 
 from data_access import (
     DF_MASTER_COLUMNS,
+    METRICA_MONTO,
     build_df_master_from_long_table,
+    load_df_master_from_db,
     validate_df_master_contract,
 )
 from report_metrics import build_ai_context
@@ -95,4 +98,63 @@ def test_generated_df_master_feeds_report_metrics_ai_context_and_json_serializes
     assert context["periodo"]["current_year"] == 2026
     assert context["summary"]["monto_actual"] == pytest.approx(120)
     assert context["summary"]["monto_previo"] == pytest.approx(100)
+    json.dumps(context)
+
+
+def test_load_df_master_from_db_uses_sqlalchemy_connection_and_year_filters():
+    engine = create_engine("sqlite:///:memory:")
+    rows = [
+        (2024, 1, 1, "L2 Nueva", "Producto A", METRICA_MONTO, 50.0),
+        (2025, 1, 1, "L2 Nueva", "Producto A", METRICA_MONTO, 100.0),
+        (2026, 1, 9, "L4 Mejoras", "Producto B", METRICA_MONTO, 120.0),
+        (2026, 1, 9, "L4 Mejoras", "Producto B", "NÃºmero de crÃ©ditos formalizados", 3.0),
+    ]
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE infonavit_historico (
+                    anio INTEGER,
+                    mes INTEGER,
+                    estado INTEGER,
+                    linea TEXT,
+                    producto TEXT,
+                    metrica TEXT,
+                    valor REAL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO infonavit_historico
+                    (anio, mes, estado, linea, producto, metrica, valor)
+                VALUES
+                    (:anio, :mes, :estado, :linea, :producto, :metrica, :valor)
+                """
+            ),
+            [
+                {
+                    "anio": anio,
+                    "mes": mes,
+                    "estado": estado,
+                    "linea": linea,
+                    "producto": producto,
+                    "metrica": metrica,
+                    "valor": valor,
+                }
+                for anio, mes, estado, linea, producto, metrica, valor in rows
+            ],
+        )
+
+    df_master = load_df_master_from_db(engine, start_year=2025, end_year=2026)
+
+    assert list(df_master.columns) == DF_MASTER_COLUMNS
+    assert len(df_master) == 2
+    assert df_master["fecha"].min() == pd.Timestamp("2025-01-01")
+    assert df_master["fecha"].max() == pd.Timestamp("2026-01-01")
+    assert df_master["Monto"].sum() == pytest.approx(220)
+
+    context = build_ai_context(df_master, current_year=2026, previous_year=2025)
     json.dumps(context)

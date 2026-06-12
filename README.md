@@ -334,6 +334,8 @@ Flujo previsto:
 
 Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
 
+Nota de compatibilidad: con `pandas==3.0.3`, `data_access.py` ejecuta la consulta mediante SQLAlchemy `text()` y bind parameters, y construye el DataFrame desde el resultado. Esto evita depender de `pd.read_sql_query()` para conexiones SQLAlchemy en el endpoint `/mini-report/json`, manteniendo SQL parametrizado y acceso read-only.
+
 Contratos diferenciados:
 
 - `contract_validator.py`: valida el contrato de ingesta CSV largo.
@@ -528,12 +530,12 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-66 passed, 1 warning
+67 passed
 ```
 
-El warning conocido proviene de `pandas==2.2.0` al importar pandas. Indica que `pyarrow` sera una dependencia requerida en pandas 3.0. No bloquea la ejecucion ni invalida las pruebas. Por ahora no se agrega `pyarrow` a `requirements.txt` para evitar una dependencia pesada que el proyecto todavia no usa directamente.
+El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
 
-`pytest.ini` filtra warnings deprecados internos de matplotlib/pyparsing para mantener la salida de pruebas legible. El warning de pandas/pyarrow se conserva visible por decision operativa.
+`pytest.ini` filtra warnings deprecados internos de matplotlib/pyparsing para mantener la salida de pruebas legible.
 
 ## CI GitHub Actions
 

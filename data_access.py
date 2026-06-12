@@ -75,5 +75,7 @@ def load_df_master_from_db(engine, start_year: int | None = None, end_year: int 
         "start_year": int(start_year) if start_year is not None else None,
         "end_year": int(end_year) if end_year is not None else None,
     }
-    raw_df = pd.read_sql_query(query, engine, params=params)
+    with engine.connect() as connection:
+        result = connection.execute(query, params)
+        raw_df = pd.DataFrame(result.mappings().all(), columns=result.keys())
     return build_df_master_from_long_table(raw_df)

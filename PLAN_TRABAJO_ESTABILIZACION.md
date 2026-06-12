@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `66 passed, 1 warning`.
+- Estado vigente de pruebas: `67 passed`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -952,7 +952,7 @@ python -m pytest -q
 ```
 
 - Commit relacionado: `afb8b6b test: add validator and ETL operational coverage`.
-- Warning conocido: pandas 2.2.0 emite aviso de que `pyarrow` sera dependencia requerida en pandas 3.0. No bloquea pruebas ni ejecucion. Decision actual: no agregar `pyarrow` mientras el proyecto no lo use directamente.
+- Historico: con pandas 2.2.0 se observaba warning de `pyarrow` como futura dependencia de pandas 3.0. Ya no aparece con `pandas==3.0.3`.
 - Se agrego smoke test de visualizacion principal:
   - test: `test_plot_09_carrera_anual_smoke`;
   - usa dataset temporal pequeno;
@@ -1157,7 +1157,7 @@ Objetivo: mejorar trazabilidad, documentacion y confianza en cambios futuros sin
 | Seguridad de dependencias | Si | Se agrega `.github/dependabot.yml` para revisiones semanales de dependencias `pip`. Se mantienen versiones ancladas. | Evaluar `pip-audit` posteriormente, sin agregarlo aun al CI. |
 | Revision v3 - dependencia API sobre PostgreSQL poblado | Si | Documentado que la API no lee CSV, no migra datos y requiere `infonavit_historico` existente/poblada para `/mini-report/json` y `/mini-report/markdown`. | Agregar health/readiness ampliado si se publica API. |
 | Revision v3 - contratos diferenciados | Si | Documentado: `contract_validator.py` valida CSV largo; `data_access.py` valida `df_master`; `report_metrics.py` consume `df_master`; `mini_report.py` consume `ai_context`/JSON. | Formalizar versionado de contratos si se crean vistas SQL o API publica. |
-| Revision v3 - warnings globales en `main.py` | Si | Se reemplaza `warnings.filterwarnings("ignore")` global por filtros especificos para warnings no criticos de `matplotlib`; el warning pandas/pyarrow permanece visible. | Revisar nuevos warnings caso por caso, sin silenciamiento global. |
+| Revision v3 - warnings globales en `main.py` | Si | Se reemplaza `warnings.filterwarnings("ignore")` global por filtros especificos para warnings no criticos de `matplotlib`; el warning historico pandas/pyarrow ya no aparece con `pandas==3.0.3`. | Revisar nuevos warnings caso por caso, sin silenciamiento global. |
 | Revision v3 - `DB_PASSWORD` default | Si | `database.py` conserva default local para no romper desarrollo y registra advertencia segura si no se configura `DB_PASSWORD` ni `DATABASE_URL`; no imprime credenciales ni DSN. | En Cloud Run usar Secret Manager o variable segura obligatoria. |
 | Revision v3 - deduplicacion O(n) en ETL | Si | Se reemplaza filtro con `apply(axis=1)` por merge vectorizado por `anio`/`mes`, manteniendo comportamiento equivalente; se agrega prueba de periodos ya procesados. | Si cambia la granularidad incremental, revisar si la llave debe incluir archivo/fuente ademas de periodo. |
 | Catalogo `ESTADOS_MX` en `sii_excel_etl.py` | No | `config.py` no tiene duplicidad activa de `ESTADOS_MX`; sin embargo, existe duplicidad funcional porque `config.yaml` mantiene `id_estado -> nombre_estado` y `sii_excel_etl.py` mantiene `nombre_estado -> id_estado`. No se corrige en este bloque para no mezclar cambios sobre entrada Excel. | Centralizar despues creando catalogo inverso derivado desde `config.ESTADOS_MX` + `ESTADO_ALIASES`, reemplazar el hardcode de `sii_excel_etl.py` y cubrir con pruebas para `Aguascalientes`, `CDMX` y `Estado de Mexico`. |
@@ -1306,6 +1306,7 @@ Pendientes:
 | Latencia | API responde local y en Docker; mini reporte desde Supabase funciona; se agregan logs de `db_ms`, `metrics_ms`, `render_ms` y `total_ms`. | Medir historico de tiempos; definir umbrales aceptables; evaluar cache si latencia crece o costo aumenta. | Media antes de Cloud Run; alta si endpoint tarda demasiado o hay costo elevado. |
 | Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`; endpoints operativos protegidos con `X-API-Key`. | Autenticacion/autorizacion formal si se expone a usuarios externos; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
 | Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
+| Compatibilidad pandas 3 / SQLAlchemy en `data_access.py` | Si | Dependabot actualizo pandas a `3.0.3`; `pd.read_sql_query()` con SQLAlchemy provoco `TypeError` en Cloud Run. Se reemplaza la lectura por `connection.execute(text(...), params)` y DataFrame desde mappings, manteniendo bind parameters y contrato `df_master`. | Validar `/mini-report/json` en Cloud Run con `DATABASE_URL` read-only despues del deploy/actualizacion. |
 
 Prueba real de punta a punta:
 
@@ -1380,6 +1381,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
 - CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
 - Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
+- Compatibilidad `data_access.py` ajustada para `pandas==3.0.3` y SQLAlchemy sin perder SQL parametrizado.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1390,14 +1392,14 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `66 passed, 1 warning`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `67 passed`.
 
 ### Pendientes reales
 
 - Definir politica de manejo de errores: detener, advertir o continuar segun severidad.
 - Definir vistas/tablas analiticas para mini reporte.
 - Centralizar catalogo de estados nombre/id eliminando duplicidad funcional entre `config.yaml` y `sii_excel_etl.py`.
-- Mantener monitoreado el warning de pandas/pyarrow; agregar `pyarrow` solo si se adopta pandas 3.x o formatos Arrow/Parquet.
+- Warning historico de pandas/pyarrow resuelto tras actualizacion a `pandas==3.0.3`; mantener monitoreo de compatibilidad pandas/SQLAlchemy.
 - Definir si la ausencia de archivos `.xls` o `.xlsx` debe detener el proceso o solo advertir cuando ya existe CSV consolidado.
 - Definir comportamiento cuando `anio_objetivo` no existe pero se usa para graficas de proyeccion.
 - Definir alcance del front operativo futuro: solo ejecutar ETL, ejecutar reporte completo o administrar configuracion.

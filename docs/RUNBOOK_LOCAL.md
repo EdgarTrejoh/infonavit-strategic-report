@@ -17,10 +17,10 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-66 passed, 1 warning
+67 passed
 ```
 
-El warning conocido de pandas/pyarrow no bloquea.
+El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
 
 ## 3. Levantar API local con uvicorn
 
