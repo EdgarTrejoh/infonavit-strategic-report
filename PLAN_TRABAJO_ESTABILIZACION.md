@@ -1382,6 +1382,8 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
 - Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
 - Compatibilidad `data_access.py` ajustada para `pandas==3.0.3` y SQLAlchemy sin perder SQL parametrizado.
+- Cloud Run publicado y validado: `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
+- Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1434,7 +1436,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Preparacion productiva
 
-5. Ejecutar deploy controlado en Cloud Run solo despues de presupuesto, limites de instancia, Secret Manager, usuario DB read-only y control de acceso.
+5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx y costo.
 6. Mantener validacion local con:
 
 ```text

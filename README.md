@@ -495,6 +495,27 @@ Pendientes:
 - limites de instancia;
 - monitoreo de latencia/costo.
 
+## Validacion Cloud Run
+
+URL publicada:
+
+```text
+https://infonavit-strategic-report-api-490229283844.us-west1.run.app
+```
+
+Validacion realizada el 2026-06-12:
+
+- `/health` publico responde `200 OK`.
+- `/db/health` sin `X-API-Key` responde `401`.
+- `/mini-report/json` sin `X-API-Key` responde `401`.
+- `/mini-report/markdown` sin `X-API-Key` responde `401`.
+- `/db/health` con `X-API-Key` responde `200 OK` y `database=available`.
+- `/mini-report/json` con `X-API-Key` responde `200 OK`, JSON serializable y 5 secciones esperadas.
+- `/mini-report/markdown` con `X-API-Key` responde `200 OK` y contiene las 5 secciones del mini reporte.
+- Todas las respuestas probadas incluyeron header `X-Request-ID`.
+
+No se imprimio ni documento el valor real de `INFONAVIT_API_KEY`.
+
 ## Observabilidad y seguridad operativa de la API
 
 - La API genera un `request_id` por peticion y lo regresa en el header `X-Request-ID`.
