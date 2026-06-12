@@ -33,6 +33,8 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 - `INFONAVIT_API_KEY` no debe ir en Git.
 - No usar `.env` en produccion.
 - Usar Secret Manager o variables seguras de Cloud Run.
+- `DATABASE_URL` de Cloud Run debe apuntar a un usuario PostgreSQL/Supabase read-only.
+- La credencial admin/migration no debe configurarse en Cloud Run.
 - No imprimir `DATABASE_URL`.
 - No imprimir `DB_PASSWORD`.
 - No imprimir `INFONAVIT_API_KEY`.
@@ -66,6 +68,9 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 - Validar rangos razonables para anios y `month_limit`.
 - No exponer errores crudos de SQLAlchemy/psycopg2.
 - Usar usuario de base con permisos minimos en produccion.
+- La API debe usar un usuario con permisos `SELECT`.
+- El migrador debe usar una credencial admin/migration separada para cargas y upsert.
+- No crear tabla `app_users` todavia; queda para una fase posterior con login, clientes, permisos por usuario o auditoria funcional.
 - Mantener endpoints de solo lectura.
 - No permitir que la IA ejecute SQL.
 
@@ -105,6 +110,8 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `/mini-report/markdown` local pasa con `X-API-Key`.
 - [ ] `.env` no versionado.
 - [ ] `DATABASE_URL` configurado como secreto.
+- [ ] `DATABASE_URL` usa usuario read-only para API.
+- [ ] Credencial admin/migration fuera de Cloud Run.
 - [ ] `INFONAVIT_API_KEY` configurado como secreto.
 - [ ] Presupuesto GCP configurado.
 - [ ] Alertas GCP configuradas.
@@ -113,3 +120,5 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] Revision de parametros API completada.
 - [ ] Revision de SQL injection completada.
 - [ ] Usuario de base con permisos minimos definido.
+- [ ] `SELECT COUNT(*)` funciona con usuario read-only.
+- [ ] `INSERT`, `UPDATE` y `DELETE` fallan con usuario read-only.

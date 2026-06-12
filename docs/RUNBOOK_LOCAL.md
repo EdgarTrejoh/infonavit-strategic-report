@@ -91,6 +91,9 @@ Notas operativas:
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
 - Antes de usar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
+- La API debe usar `DATABASE_URL` con usuario read-only.
+- El migrador debe usar una credencial admin/migration separada.
+- Cloud Run debe recibir solo la credencial read-only; la credencial admin no debe configurarse en Cloud Run.
 
 ## 5. Construir imagen Docker
 
@@ -176,8 +179,6 @@ outputs/mini_report/mini_report.json
 outputs/mini_report/mini_report.md
 ```
 
-## 10. Migracion PostgreSQL manual
-
 ## 10. Retencion / higiene operativa
 
 Dry-run seguro, sin borrar archivos:
@@ -202,7 +203,45 @@ La retencion solo opera sobre:
 
 No toca `datos_entrada/`, `SII_concentrado_v3.csv`, `.env`, `.venv/` ni salidas finales.
 
-## 11. Migracion PostgreSQL manual
+## 11. Usuarios de base por minimo privilegio
+
+Plantilla SQL sugerida:
+
+```text
+docs/sql/create_api_readonly_user.sql
+```
+
+Politica:
+
+- La API FastAPI usa `DATABASE_URL` con usuario read-only.
+- El migrador `migrate_csv_to_pg.py` usa credencial admin/migration separada.
+- Cloud Run solo debe recibir la credencial read-only.
+- La credencial admin/migration no debe configurarse en Cloud Run.
+- No crear tabla `app_users` todavia; queda para una fase posterior con login, clientes, permisos por usuario o auditoria funcional.
+
+Validaciones manuales sugeridas con el usuario read-only:
+
+```sql
+SELECT COUNT(*) FROM public.infonavit_historico;
+```
+
+Las siguientes operaciones deben fallar por permisos. Ejecutarlas solo dentro de una transaccion y terminar con `ROLLBACK`:
+
+```sql
+BEGIN;
+INSERT INTO public.infonavit_historico (id_reporte) VALUES ('permission-test');
+ROLLBACK;
+
+BEGIN;
+UPDATE public.infonavit_historico SET fuente = fuente WHERE false;
+ROLLBACK;
+
+BEGIN;
+DELETE FROM public.infonavit_historico WHERE false;
+ROLLBACK;
+```
+
+## 12. Migracion PostgreSQL manual
 
 El migrador esta protegido contra ejecucion accidental.
 
@@ -224,7 +263,7 @@ Para ejecutar una migracion real, usar confirmacion explicita:
 python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 ```
 
-## 12. Notas de seguridad
+## 13. Notas de seguridad
 
 - No compartir `.env`.
 - No versionar `.env`.
@@ -233,5 +272,7 @@ python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 - No imprimir usuario, password, host completo ni connection string.
 - No ejecutar migraciones por accidente.
 - Confirmar que `DATABASE_URL` apunta al ambiente correcto antes de cualquier operacion.
+- Confirmar que `DATABASE_URL` de API usa usuario read-only.
+- No usar credenciales admin/migration en Cloud Run.
 - Usar Secret Manager o variables seguras de Cloud Run en despliegues futuros.
 - No subir CSV, Excel, PDF, PNG, logs ni artefactos generados al repositorio.

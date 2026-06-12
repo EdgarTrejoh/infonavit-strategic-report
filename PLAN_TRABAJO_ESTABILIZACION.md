@@ -1305,6 +1305,7 @@ Pendientes:
 | Redundancia / recuperacion | Datos locales; Supabase como fuente remota; repo GitHub; outputs locales ignorados. | Politica de backup Supabase; export periodico; prueba de restore; estrategia si Supabase falla; posible modo degradado de API. | Media para demo; alta para produccion real. |
 | Latencia | API responde local y en Docker; mini reporte desde Supabase funciona; se agregan logs de `db_ms`, `metrics_ms`, `render_ms` y `total_ms`. | Medir historico de tiempos; definir umbrales aceptables; evaluar cache si latencia crece o costo aumenta. | Media antes de Cloud Run; alta si endpoint tarda demasiado o hay costo elevado. |
 | Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`; endpoints operativos protegidos con `X-API-Key`. | Autenticacion/autorizacion formal si se expone a usuarios externos; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
+| Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
 
 Prueba real de punta a punta:
 
@@ -1378,6 +1379,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
 - Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
 - CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
+- Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1402,7 +1404,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Validar politica de retencion en ambiente real antes de activar `enabled: true`.
 - Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
 - Agregar prueba opcional de integracion PostgreSQL.
-- Crear/usar usuario de base de datos de solo lectura para la API.
+- Crear/validar usuario real de base de datos de solo lectura para la API en Supabase.
 - Configurar Secret Manager o variables seguras en Cloud Run.
 - Configurar presupuesto y alertas GCP antes del despliegue.
 - Definir politica de backups Supabase y prueba de restore.
@@ -1423,7 +1425,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Crear usuario DB de solo lectura para la API.
+1. Crear y validar usuario DB de solo lectura para la API en Supabase.
 2. Configurar `INFONAVIT_API_KEY` y `DATABASE_URL` como secretos o variables seguras antes de Cloud Run.
 3. Validar que GitHub Actions pase en `main`.
 4. Ejecutar una prueba Docker local final antes del deploy controlado.

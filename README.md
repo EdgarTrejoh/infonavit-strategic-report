@@ -432,6 +432,16 @@ $env:INFONAVIT_API_KEY="change_me_local_only"
 curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/json?current_year=2026&previous_year=2025"
 ```
 
+Credenciales de base por minimo privilegio:
+
+- La API debe usar `DATABASE_URL` con un usuario PostgreSQL/Supabase de solo lectura.
+- El usuario de API debe tener permisos `SELECT` sobre `public.infonavit_historico` y vistas analiticas futuras, si se crean.
+- El migrador `migrate_csv_to_pg.py` debe usar una credencial admin/migration separada para cargas y upsert.
+- Cloud Run debe recibir solo la credencial read-only de la API.
+- La credencial admin/migration no debe configurarse en Cloud Run.
+- No se crea tabla `app_users` todavia. Esa tabla queda para una fase posterior si se implementan login, clientes, permisos por usuario o auditoria funcional.
+- Plantilla SQL sugerida: [docs/sql/create_api_readonly_user.sql](docs/sql/create_api_readonly_user.sql).
+
 ## Preparacion para Cloud Run
 
 El proyecto incluye `Dockerfile` y `.dockerignore` para contenerizar la API FastAPI.
