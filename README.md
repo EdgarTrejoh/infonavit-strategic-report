@@ -397,6 +397,35 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 
 Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
 
+## Mini reporte ejecutivo extendido sin IA
+
+Los modulos `report_metrics_extended.py` y `mini_report_extended.py` amplian el contexto analitico usando solo `infonavit_historico`.
+
+Metricas usadas:
+
+- `Monto de credito Infonavit`;
+- `Numero de creditos formalizados`.
+
+El reporte extendido calcula:
+
+- monto colocado YTD comparable;
+- numero de creditos formalizados YTD comparable;
+- ticket promedio = monto / creditos;
+- variaciones absolutas y porcentuales contra anio previo;
+- rankings por estado, linea y producto;
+- narrativa deterministica sin IA.
+
+Cruces futuros pendientes, no integrados todavia:
+
+- INPC / inflacion real;
+- indice SHF;
+- salario minimo;
+- IMSS derechohabientes.
+
+Estos cruces no deben interpretarse como ya integrados hasta que existan datos, validacion y contrato especifico.
+
+Si falta la metrica `Numero de creditos formalizados` en el periodo consultado, el reporte extendido no rellena creditos ni ticket con ceros silenciosos: devuelve valores nulos y agrega warning metodologico. La metrica real en base conserva acentos (`Número de créditos formalizados`).
+
 ## API minima FastAPI
 
 La carpeta `api/` expone una primera API local de solo lectura para el mini reporte ejecutivo.
@@ -407,13 +436,15 @@ Endpoints disponibles:
 - `GET /db/health`: health check seguro de PostgreSQL/Supabase; requiere `X-API-Key`.
 - `GET /mini-report/json`: genera mini reporte JSON en memoria; requiere `X-API-Key`.
 - `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
+- `GET /mini-report/extended/json`: genera reporte ejecutivo extendido JSON; requiere `X-API-Key`.
+- `GET /mini-report/extended/markdown`: genera reporte ejecutivo extendido Markdown; requiere `X-API-Key`.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
 Dependencia operativa de datos:
 
 - La API FastAPI no lee directamente del CSV.
-- `/mini-report/json` y `/mini-report/markdown` requieren PostgreSQL/Supabase disponible.
+- `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren PostgreSQL/Supabase disponible.
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
 - Antes de levantar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
@@ -561,7 +592,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-69 passed
+78 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.

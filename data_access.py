@@ -6,6 +6,8 @@ from sqlalchemy import text
 import config
 
 METRICA_MONTO = "Monto de crédito Infonavit"
+METRICA_CREDITOS = "Número de créditos formalizados"
+METRICAS_EXTENDIDAS = [METRICA_MONTO, METRICA_CREDITOS]
 DF_MASTER_COLUMNS = ["fecha", "linea", "producto", "nombre_estado", "Monto"]
 
 
@@ -79,3 +81,24 @@ def load_df_master_from_db(engine, start_year: int | None = None, end_year: int 
         result = connection.execute(query, params)
         raw_df = pd.DataFrame(result.mappings().all(), columns=result.keys())
     return build_df_master_from_long_table(raw_df)
+
+
+def load_long_metrics_from_db(engine, start_year: int | None = None, end_year: int | None = None) -> pd.DataFrame:
+    query = text(
+        """
+        SELECT anio, mes, estado, linea, producto, metrica, valor
+        FROM infonavit_historico
+        WHERE metrica IN (:metrica_monto, :metrica_creditos)
+          AND (:start_year IS NULL OR anio >= :start_year)
+          AND (:end_year IS NULL OR anio <= :end_year)
+        """
+    )
+    params = {
+        "metrica_monto": METRICA_MONTO,
+        "metrica_creditos": METRICA_CREDITOS,
+        "start_year": int(start_year) if start_year is not None else None,
+        "end_year": int(end_year) if end_year is not None else None,
+    }
+    with engine.connect() as connection:
+        result = connection.execute(query, params)
+        return pd.DataFrame(result.mappings().all(), columns=result.keys())

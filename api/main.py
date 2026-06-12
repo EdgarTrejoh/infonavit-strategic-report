@@ -10,9 +10,11 @@ import uuid
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
-from data_access import load_df_master_from_db, validate_df_master_contract
+from data_access import load_df_master_from_db, load_long_metrics_from_db, validate_df_master_contract
 from database import engine, health_check
+from mini_report_extended import generate_extended_report
 from mini_report import generate_mini_report
+from report_metrics_extended import build_extended_context
 from report_metrics import build_ai_context
 
 logger = logging.getLogger(__name__)
@@ -138,6 +140,53 @@ def _build_report(
         raise HTTPException(status_code=500, detail="No se pudo generar el mini reporte.") from exc
 
 
+def _build_extended_report(
+    current_year: int,
+    previous_year: int,
+    month_limit: int | None,
+    start_year: int | None,
+    end_year: int | None,
+    request_id: str | None = None,
+) -> tuple[dict, str]:
+    if engine is None:
+        raise HTTPException(status_code=503, detail=SAFE_DB_ERROR)
+
+    try:
+        total_start = time.perf_counter()
+        db_start = time.perf_counter()
+        long_df = load_long_metrics_from_db(engine, start_year=start_year, end_year=end_year)
+        db_ms = round((time.perf_counter() - db_start) * 1000, 2)
+
+        metrics_start = time.perf_counter()
+        context = build_extended_context(
+            long_df,
+            current_year=current_year,
+            previous_year=previous_year,
+            month_limit=month_limit,
+        )
+        metrics_ms = round((time.perf_counter() - metrics_start) * 1000, 2)
+
+        render_start = time.perf_counter()
+        report_json, markdown = generate_extended_report(context, output_dir=None)
+        json.dumps(report_json, ensure_ascii=False)
+        render_ms = round((time.perf_counter() - render_start) * 1000, 2)
+        total_ms = round((time.perf_counter() - total_start) * 1000, 2)
+        logger.info(
+            "mini_report_extended_pipeline db_ms=%s metrics_ms=%s render_ms=%s total_ms=%s request_id=%s",
+            db_ms,
+            metrics_ms,
+            render_ms,
+            total_ms,
+            request_id,
+        )
+        return report_json, markdown
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("No se pudo generar mini reporte extendido: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="No se pudo generar el mini reporte extendido.") from exc
+
+
 @app.get("/mini-report/json")
 def mini_report_json(
     request: Request,
@@ -172,6 +221,50 @@ def mini_report_markdown(
 ):
     _validate_report_params(current_year, previous_year, start_year, end_year)
     _, markdown = _build_report(
+        current_year=current_year,
+        previous_year=previous_year,
+        month_limit=month_limit,
+        start_year=start_year,
+        end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    return markdown
+
+
+@app.get("/mini-report/extended/json")
+def mini_report_extended_json(
+    request: Request,
+    _: None = Depends(require_api_key),
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
+    month_limit: int | None = Query(None, ge=1, le=12),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
+    report_json, _ = _build_extended_report(
+        current_year=current_year,
+        previous_year=previous_year,
+        month_limit=month_limit,
+        start_year=start_year,
+        end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    return report_json
+
+
+@app.get("/mini-report/extended/markdown", response_class=PlainTextResponse)
+def mini_report_extended_markdown(
+    request: Request,
+    _: None = Depends(require_api_key),
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
+    month_limit: int | None = Query(None, ge=1, le=12),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
+    _, markdown = _build_extended_report(
         current_year=current_year,
         previous_year=previous_year,
         month_limit=month_limit,

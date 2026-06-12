@@ -6,9 +6,11 @@ from sqlalchemy import create_engine, text
 
 from data_access import (
     DF_MASTER_COLUMNS,
+    METRICA_CREDITOS,
     METRICA_MONTO,
     build_df_master_from_long_table,
     load_df_master_from_db,
+    load_long_metrics_from_db,
     validate_df_master_contract,
 )
 from report_metrics import build_ai_context
@@ -107,7 +109,7 @@ def test_load_df_master_from_db_uses_sqlalchemy_connection_and_year_filters():
         (2024, 1, 1, "L2 Nueva", "Producto A", METRICA_MONTO, 50.0),
         (2025, 1, 1, "L2 Nueva", "Producto A", METRICA_MONTO, 100.0),
         (2026, 1, 9, "L4 Mejoras", "Producto B", METRICA_MONTO, 120.0),
-        (2026, 1, 9, "L4 Mejoras", "Producto B", "NÃºmero de crÃ©ditos formalizados", 3.0),
+        (2026, 1, 9, "L4 Mejoras", "Producto B", METRICA_CREDITOS, 3.0),
     ]
     with engine.begin() as connection:
         connection.execute(
@@ -158,3 +160,68 @@ def test_load_df_master_from_db_uses_sqlalchemy_connection_and_year_filters():
 
     context = build_ai_context(df_master, current_year=2026, previous_year=2025)
     json.dumps(context)
+
+
+def test_load_long_metrics_from_db_reads_monto_and_creditos_with_year_filters():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE infonavit_historico (
+                    anio INTEGER,
+                    mes INTEGER,
+                    estado INTEGER,
+                    linea TEXT,
+                    producto TEXT,
+                    metrica TEXT,
+                    valor REAL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO infonavit_historico
+                    (anio, mes, estado, linea, producto, metrica, valor)
+                VALUES
+                    (:anio, :mes, :estado, :linea, :producto, :metrica, :valor)
+                """
+            ),
+            [
+                {
+                    "anio": 2024,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_MONTO,
+                    "valor": 50.0,
+                },
+                {
+                    "anio": 2025,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_MONTO,
+                    "valor": 100.0,
+                },
+                {
+                    "anio": 2025,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_CREDITOS,
+                    "valor": 10.0,
+                },
+            ],
+        )
+
+    df = load_long_metrics_from_db(engine, start_year=2025, end_year=2025)
+
+    assert set(df["anio"]) == {2025}
+    assert set(df["metrica"]) == {METRICA_MONTO, METRICA_CREDITOS}
+    assert len(df) == 2

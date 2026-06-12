@@ -66,6 +66,42 @@ def _fake_markdown():
     )
 
 
+def _fake_extended_report():
+    return {
+        "title": "Reporte ejecutivo INFONAVIT extendido",
+        "period": {
+            "current_year": 2026,
+            "previous_year": 2025,
+            "month_limit": 4,
+            "comparability": "YTD comparable",
+        },
+        "summary": {
+            "monto_actual": 120.0,
+            "monto_previo": 100.0,
+            "creditos_actual": 12.0,
+            "creditos_previo": 10.0,
+            "ticket_promedio_actual": 10.0,
+            "ticket_promedio_previo": 10.0,
+        },
+        "drivers": {},
+        "rankings": {},
+        "methodology": {"notes": [], "warnings": []},
+        "future_crosses": {"inflacion_inpc": "pendiente"},
+    }
+
+
+def _fake_extended_markdown():
+    return "\n".join(
+        [
+            "# Reporte ejecutivo INFONAVIT extendido",
+            "## 1. Resumen ejecutivo",
+            "Monto colocado y numero de creditos formalizados.",
+            "Ticket promedio.",
+            "## 5. Nota metodologica",
+        ]
+    )
+
+
 def _patch_report_flow(monkeypatch):
     monkeypatch.setattr(api_main, "engine", object())
     monkeypatch.setattr(api_main, "load_df_master_from_db", lambda engine, start_year=None, end_year=None: _fake_df_master())
@@ -79,6 +115,21 @@ def _patch_report_flow(monkeypatch):
         api_main,
         "generate_mini_report",
         lambda ai_context, output_dir=None: (_fake_report(), _fake_markdown()),
+    )
+
+
+def _patch_extended_report_flow(monkeypatch):
+    monkeypatch.setattr(api_main, "engine", object())
+    monkeypatch.setattr(api_main, "load_long_metrics_from_db", lambda engine, start_year=None, end_year=None: _fake_df_master())
+    monkeypatch.setattr(
+        api_main,
+        "build_extended_context",
+        lambda df, current_year, previous_year, month_limit=None: {"period": {"current_year": current_year}},
+    )
+    monkeypatch.setattr(
+        api_main,
+        "generate_extended_report",
+        lambda context, output_dir=None: (_fake_extended_report(), _fake_extended_markdown()),
     )
 
 
@@ -232,6 +283,41 @@ def test_mini_report_markdown_rejects_invalid_api_key(monkeypatch):
 
     assert response.status_code == 401
     _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_extended_json_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/extended/json")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_extended_json_returns_expected_structure(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/extended/json", headers=_auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Reporte ejecutivo INFONAVIT extendido"
+    assert "summary" in payload
+    assert "future_crosses" in payload
+
+
+def test_mini_report_extended_markdown_returns_plain_text(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/extended/markdown", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "Reporte ejecutivo INFONAVIT extendido" in response.text
+    assert "Ticket promedio" in response.text
 
 
 def test_mini_report_markdown_returns_plain_text(monkeypatch):

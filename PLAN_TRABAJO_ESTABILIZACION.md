@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `69 passed`.
+- Estado vigente de pruebas: `78 passed`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1234,6 +1234,17 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 
 Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
 
+## Mini reporte ejecutivo extendido sin IA
+
+Se agregan `report_metrics_extended.py` y `mini_report_extended.py` para ampliar el contexto analitico usando solo `infonavit_historico`.
+
+- Metricas: monto de credito INFONAVIT y numero de creditos formalizados.
+- Calcula monto, creditos, ticket promedio y variaciones YTD comparables.
+- Incluye rankings por estado, linea y producto.
+- Genera narrativa deterministica, sin OpenAI.
+- Deja como cruces futuros pendientes INPC/inflacion, indice SHF, salario minimo e IMSS derechohabientes.
+- No afirma esos cruces como integrados todavia.
+
 ## API minima FastAPI
 
 La carpeta `api/` expone una primera API local de solo lectura para el mini reporte ejecutivo.
@@ -1244,6 +1255,8 @@ Endpoints disponibles:
 - `GET /db/health`: health check seguro de PostgreSQL/Supabase; requiere `X-API-Key`.
 - `GET /mini-report/json`: genera mini reporte JSON en memoria; requiere `X-API-Key`.
 - `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
+- `GET /mini-report/extended/json`: genera mini reporte extendido JSON; requiere `X-API-Key`.
+- `GET /mini-report/extended/markdown`: genera mini reporte extendido Markdown; requiere `X-API-Key`.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
@@ -1308,6 +1321,7 @@ Pendientes:
 | Documentacion FastAPI por ambiente | Si | `api/main.py` lee `ENVIRONMENT`; si `ENVIRONMENT=production`, desactiva `/docs`, `/redoc` y `/openapi.json`. En local/dev la documentacion FastAPI permanece disponible. | Confirmar `ENVIRONMENT=production` en Cloud Run despues del siguiente despliegue. |
 | Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
 | Compatibilidad pandas 3 / SQLAlchemy en `data_access.py` | Si | Dependabot actualizo pandas a `3.0.3`; `pd.read_sql_query()` con SQLAlchemy provoco `TypeError` en Cloud Run. Se reemplaza la lectura por `connection.execute(text(...), params)` y DataFrame desde mappings, manteniendo bind parameters y contrato `df_master`. | Validar `/mini-report/json` en Cloud Run con `DATABASE_URL` read-only despues del deploy/actualizacion. |
+| Reporte extendido - creditos y ticket promedio | Si | Se corrige constante de la metrica real `Número de créditos formalizados`; la lectura extendida trae monto y creditos. Si falta una metrica en el periodo, se devuelve `null` y warning metodologico, no ceros silenciosos. Validacion read-only: 10,904 filas para 2025-2026, 5,452 por metrica. | Validar endpoint extendido en Cloud Run despues del siguiente despliegue. |
 
 Prueba real de punta a punta:
 
@@ -1384,6 +1398,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
 - Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
 - Compatibilidad `data_access.py` ajustada para `pandas==3.0.3` y SQLAlchemy sin perder SQL parametrizado.
+- Mini reporte ejecutivo extendido implementado: monto, creditos, ticket promedio, rankings y narrativa deterministica sin IA.
 - Cloud Run publicado y validado: `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
 - Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
@@ -1396,7 +1411,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `69 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `78 passed`.
 
 ### Pendientes reales
 

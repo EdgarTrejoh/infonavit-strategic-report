@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-69 passed
+78 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -91,13 +91,25 @@ curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/jso
 curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
 
+### Mini reporte extendido JSON
+
+```powershell
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/extended/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
+### Mini reporte extendido Markdown
+
+```powershell
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/extended/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
 Notas operativas:
 
 - La API FastAPI no lee directamente del CSV.
 - `/health` permanece publico.
-- `/db/health`, `/mini-report/json` y `/mini-report/markdown` requieren header `X-API-Key`.
+- `/db/health`, `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren header `X-API-Key`.
 - La variable `INFONAVIT_API_KEY` debe estar configurada en `.env`, PowerShell o variable segura del entorno.
-- `/mini-report/json` y `/mini-report/markdown` requieren PostgreSQL/Supabase disponible.
+- `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren PostgreSQL/Supabase disponible.
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
 - Antes de usar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
@@ -189,7 +201,54 @@ outputs/mini_report/mini_report.json
 outputs/mini_report/mini_report.md
 ```
 
-## 10. Retencion / higiene operativa
+## 10. Generar mini reporte extendido local desde Supabase
+
+Este comando lee Supabase/PostgreSQL con `DATABASE_URL_READONLY`, carga monto y creditos, genera contexto analitico extendido y guarda salidas locales en `outputs/mini_report/`.
+
+```powershell
+@'
+from dotenv import load_dotenv
+import json
+import os
+
+load_dotenv()
+os.environ["DATABASE_URL"] = os.getenv("DATABASE_URL_READONLY", "")
+
+from database import engine
+from data_access import load_long_metrics_from_db
+from report_metrics_extended import build_extended_context
+from mini_report_extended import generate_extended_report
+
+raw = load_long_metrics_from_db(engine, start_year=2025, end_year=2026)
+context = build_extended_context(raw, current_year=2026, previous_year=2025)
+report_json, markdown = generate_extended_report(context, output_dir="outputs/mini_report")
+json.dumps(report_json, ensure_ascii=False)
+
+print("raw_shape=", raw.shape)
+print("json_path=outputs/mini_report/mini_report_extended.json")
+print("markdown_path=outputs/mini_report/mini_report_extended.md")
+print("markdown_chars=", len(markdown))
+print("creditos_actual=", report_json["summary"]["creditos_actual"])
+print("ticket_promedio_actual=", report_json["summary"]["ticket_promedio_actual"])
+'@ | python -
+```
+
+Archivos esperados:
+
+```text
+outputs/mini_report/mini_report_extended.json
+outputs/mini_report/mini_report_extended.md
+```
+
+Validacion esperada con datos 2025-2026 cargados:
+
+```text
+raw_shape= (10904, 7)
+creditos_actual > 0
+ticket_promedio_actual calculado
+```
+
+## 11. Retencion / higiene operativa
 
 Dry-run seguro, sin borrar archivos:
 
@@ -213,7 +272,7 @@ La retencion solo opera sobre:
 
 No toca `datos_entrada/`, `SII_concentrado_v3.csv`, `.env`, `.venv/` ni salidas finales.
 
-## 11. Usuarios de base por minimo privilegio
+## 12. Usuarios de base por minimo privilegio
 
 Plantilla SQL sugerida:
 
@@ -251,7 +310,7 @@ DELETE FROM public.infonavit_historico WHERE false;
 ROLLBACK;
 ```
 
-## 12. Migracion PostgreSQL manual
+## 13. Migracion PostgreSQL manual
 
 El migrador esta protegido contra ejecucion accidental.
 
@@ -273,7 +332,7 @@ Para ejecutar una migracion real, usar confirmacion explicita:
 python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 ```
 
-## 13. Notas de seguridad
+## 14. Notas de seguridad
 
 - No compartir `.env`.
 - No versionar `.env`.
