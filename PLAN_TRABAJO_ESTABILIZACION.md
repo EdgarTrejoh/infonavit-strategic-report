@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `67 passed`.
+- Estado vigente de pruebas: `69 passed`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1305,6 +1305,7 @@ Pendientes:
 | Redundancia / recuperacion | Datos locales; Supabase como fuente remota; repo GitHub; outputs locales ignorados. | Politica de backup Supabase; export periodico; prueba de restore; estrategia si Supabase falla; posible modo degradado de API. | Media para demo; alta para produccion real. |
 | Latencia | API responde local y en Docker; mini reporte desde Supabase funciona; se agregan logs de `db_ms`, `metrics_ms`, `render_ms` y `total_ms`. | Medir historico de tiempos; definir umbrales aceptables; evaluar cache si latencia crece o costo aumenta. | Media antes de Cloud Run; alta si endpoint tarda demasiado o hay costo elevado. |
 | Seguridad API / SQL | API solo lectura; sin migraciones desde API; sin endpoints de escritura; validacion de parametros; revision anti SQL injection; SQL parametrizado en `data_access.py`; endpoints operativos protegidos con `X-API-Key`. | Autenticacion/autorizacion formal si se expone a usuarios externos; usuario DB con permisos minimos; Secret Manager en Cloud Run; no exponer API publicamente sin control. | Alta antes de publicacion publica. |
+| Documentacion FastAPI por ambiente | Si | `api/main.py` lee `ENVIRONMENT`; si `ENVIRONMENT=production`, desactiva `/docs`, `/redoc` y `/openapi.json`. En local/dev la documentacion FastAPI permanece disponible. | Confirmar `ENVIRONMENT=production` en Cloud Run despues del siguiente despliegue. |
 | Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
 | Compatibilidad pandas 3 / SQLAlchemy en `data_access.py` | Si | Dependabot actualizo pandas a `3.0.3`; `pd.read_sql_query()` con SQLAlchemy provoco `TypeError` en Cloud Run. Se reemplaza la lectura por `connection.execute(text(...), params)` y DataFrame desde mappings, manteniendo bind parameters y contrato `df_master`. | Validar `/mini-report/json` en Cloud Run con `DATABASE_URL` read-only despues del deploy/actualizacion. |
 
@@ -1379,6 +1380,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Dockerfile y `.dockerignore` creados para despliegue futuro en Cloud Run.
 - Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
 - Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
+- Documentacion FastAPI controlada por ambiente: Swagger/OpenAPI disponible en local; desactivada con `ENVIRONMENT=production`.
 - CI GitHub Actions implementado: valida `pytest` con Python 3.11 y `docker build` de la API sin secrets, sin Supabase real, sin migraciones y sin deploy.
 - Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
 - Compatibilidad `data_access.py` ajustada para `pandas==3.0.3` y SQLAlchemy sin perder SQL parametrizado.
@@ -1394,7 +1396,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `67 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `69 passed`.
 
 ### Pendientes reales
 
@@ -1430,7 +1432,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 ### Prioridad inmediata
 
 1. Crear y validar usuario DB de solo lectura para la API en Supabase.
-2. Configurar `INFONAVIT_API_KEY` y `DATABASE_URL` como secretos o variables seguras antes de Cloud Run.
+2. Configurar `INFONAVIT_API_KEY`, `DATABASE_URL` y `ENVIRONMENT=production` como secretos o variables seguras antes de Cloud Run.
 3. Validar que GitHub Actions pase en `main`.
 4. Ejecutar una prueba Docker local final antes del deploy controlado.
 

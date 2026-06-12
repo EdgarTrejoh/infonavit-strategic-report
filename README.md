@@ -426,6 +426,8 @@ Seguridad minima:
 - En local puede definirse en `.env` o en la sesion de PowerShell.
 - En Cloud Run debe configurarse con Secret Manager o variable segura.
 - Nunca versionar, compartir ni registrar la API key.
+- Swagger/OpenAPI (`/docs`, `/redoc`, `/openapi.json`) queda disponible en local.
+- En Cloud Run debe configurarse `ENVIRONMENT=production` para desactivar `/docs`, `/redoc` y `/openapi.json`.
 
 Ejemplo local sin valor real:
 
@@ -463,6 +465,14 @@ docker run --rm -p 8080:8080 --env-file .env infonavit-strategic-report-api
 ```
 
 No se ha desplegado todavia en Google Cloud. Cloud Run queda como destino preferente futuro por escalado a cero y control de gasto. Las variables sensibles deben configurarse mediante Secret Manager o variables seguras de Cloud Run, nunca en Git.
+
+En Cloud Run configurar:
+
+```text
+ENVIRONMENT=production
+```
+
+Con esa variable se desactivan `/docs`, `/redoc` y `/openapi.json`. En local, si `ENVIRONMENT` no es `production`, la documentacion FastAPI permanece disponible para desarrollo.
 
 Antes de desplegar:
 
@@ -551,7 +561,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-67 passed
+69 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.

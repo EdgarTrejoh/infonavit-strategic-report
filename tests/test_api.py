@@ -1,3 +1,4 @@
+import importlib
 from pathlib import Path
 
 import pandas as pd
@@ -98,6 +99,32 @@ def test_health_returns_ok():
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "service": "infonavit-strategic-report-api"}
     assert response.headers["X-Request-ID"]
+
+
+def test_fastapi_docs_are_available_outside_production(monkeypatch):
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    reloaded = importlib.reload(api_main)
+
+    response = TestClient(reloaded.app).get("/openapi.json")
+
+    assert response.status_code == 200
+    assert response.json()["info"]["title"] == "INFONAVIT Strategic Report API"
+
+
+def test_fastapi_docs_are_disabled_in_production(monkeypatch):
+    try:
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        reloaded = importlib.reload(api_main)
+
+        client = TestClient(reloaded.app)
+        docs_response = client.get("/docs")
+        openapi_response = client.get("/openapi.json")
+
+        assert docs_response.status_code == 404
+        assert openapi_response.status_code == 404
+    finally:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        importlib.reload(api_main)
 
 
 def test_db_health_does_not_expose_credentials(monkeypatch):

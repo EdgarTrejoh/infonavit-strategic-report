@@ -21,8 +21,15 @@ SERVICE_NAME = "infonavit-strategic-report-api"
 SAFE_DB_ERROR = "No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."
 SAFE_AUTH_ERROR = "API key requerida o invalida."
 SAFE_AUTH_CONFIG_ERROR = "API key del servidor no configurada."
+ENVIRONMENT = os.getenv("ENVIRONMENT", "local").lower()
 
-app = FastAPI(title="INFONAVIT Strategic Report API", version="0.1.0")
+app = FastAPI(
+    title="INFONAVIT Strategic Report API",
+    version="0.1.0",
+    docs_url=None if ENVIRONMENT == "production" else "/docs",
+    redoc_url=None if ENVIRONMENT == "production" else "/redoc",
+    openapi_url=None if ENVIRONMENT == "production" else "/openapi.json",
+)
 
 
 @app.middleware("http")

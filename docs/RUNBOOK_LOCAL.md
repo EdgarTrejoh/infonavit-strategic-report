@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-67 passed
+69 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -33,6 +33,16 @@ La API queda disponible en:
 ```text
 http://127.0.0.1:8080
 ```
+
+En local, si `ENVIRONMENT` no es `production`, la documentacion FastAPI queda disponible en:
+
+```text
+http://127.0.0.1:8080/docs
+http://127.0.0.1:8080/redoc
+http://127.0.0.1:8080/openapi.json
+```
+
+En Cloud Run debe usarse `ENVIRONMENT=production`; con esa configuracion `/docs`, `/redoc` y `/openapi.json` quedan desactivados.
 
 Para detenerla, usar `Ctrl+C`.
 
