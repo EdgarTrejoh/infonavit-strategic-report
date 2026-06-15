@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import unicodedata
 from typing import Any
 
 import pandas as pd
@@ -15,6 +16,23 @@ INFLATION_UNAVAILABLE_REASON = "Inflation service not configured or unavailable"
 INFLATION_WARNING = (
     "No se integro inflacion comparable porque el servicio de inflacion no estuvo disponible o no fue configurado."
 )
+LINE_FAMILIES = [
+    {
+        "family": "Adquisicion de vivienda nueva",
+        "line_match": "Linea II: Adquisicion de vivienda nueva",
+        "match_terms": ["vivienda nueva", "l2 nueva", "linea ii adquisicion de vivienda nueva"],
+    },
+    {
+        "family": "Adquisicion de vivienda existente",
+        "line_match": "vivienda existente",
+        "match_terms": ["vivienda existente", "l2 existente"],
+    },
+    {
+        "family": "Mejoramiento",
+        "line_match": "Linea IV: Mejoramientos",
+        "match_terms": ["mejoramiento", "mejoramientos", "mejoras", "l4 mejoras"],
+    },
+]
 
 
 def _json_safe(value: Any) -> Any:
@@ -45,6 +63,19 @@ def _safe_div(numerator: float, denominator: float) -> float | None:
     if denominator == 0:
         return None
     return numerator / denominator
+
+
+def _safe_share(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator in (None, 0):
+        return None
+    return (float(numerator) / float(denominator)) * 100
+
+
+def _normalize_text(value: Any) -> str:
+    text = "" if value is None else str(value)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(text.lower().replace(":", " ").split())
 
 
 def _real_variation_pct(nominal_pct: float | None, inflation_factor: float | None) -> float | None:
@@ -138,6 +169,189 @@ def _summarize_period(df: pd.DataFrame) -> dict[str, float | None]:
     }
 
 
+def _family_reading(
+    monto_real_pct: float | None,
+    ticket_real_pct: float | None,
+    creditos_pct: float | None,
+    share_monto_delta_pp: float | None = None,
+    share_creditos_delta_pp: float | None = None,
+    family_ticket_actual: float | None = None,
+    aggregate_ticket_actual: float | None = None,
+) -> str:
+    candidates = []
+
+    if (
+        share_creditos_delta_pp is not None
+        and share_creditos_delta_pp > 0
+        and family_ticket_actual is not None
+        and aggregate_ticket_actual is not None
+        and family_ticket_actual < aggregate_ticket_actual
+    ):
+        candidates.append(
+            "La familia gano peso en creditos y presiona a la baja el ticket promedio agregado por efecto mezcla."
+        )
+    if share_monto_delta_pp is not None and share_monto_delta_pp > 0:
+        candidates.append("La familia gano participacion en monto colocado.")
+
+    if monto_real_pct is None or ticket_real_pct is None:
+        candidates.append("No hay inflacion comparable suficiente para interpretar variaciones reales.")
+    else:
+        if monto_real_pct > 0:
+            candidates.append("El monto colocado crecio en terminos reales.")
+        elif monto_real_pct < 0:
+            candidates.append("El monto colocado disminuyo en terminos reales.")
+        else:
+            candidates.append("El monto colocado se mantuvo estable en terminos reales.")
+
+        if ticket_real_pct > 0:
+            candidates.append("El ticket promedio supero la inflacion comparable.")
+        elif ticket_real_pct < 0:
+            candidates.append("El ticket promedio perdio terreno frente a la inflacion comparable.")
+        else:
+            candidates.append("El ticket promedio se mantuvo practicamente estable en terminos reales.")
+
+    if creditos_pct is None:
+        candidates.append("No hay datos suficientes para interpretar el volumen de creditos.")
+    elif creditos_pct > 0:
+        candidates.append("El volumen de creditos aumento.")
+    elif creditos_pct < 0:
+        candidates.append("El volumen de creditos disminuyo.")
+    else:
+        candidates.append("El volumen de creditos se mantuvo estable.")
+
+    selected = []
+    for sentence in candidates:
+        if sentence not in selected:
+            selected.append(sentence)
+        if len(selected) == 2:
+            break
+    return " ".join(selected)
+
+
+def _empty_family_entry(family_config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "family": family_config["family"],
+        "line_match": family_config["line_match"],
+        "current": {"monto": None, "creditos": None, "ticket_promedio": None},
+        "previous": {"monto": None, "creditos": None, "ticket_promedio": None},
+        "variations": {
+            "monto_nominal_pct": None,
+            "monto_real_pct": None,
+            "creditos_pct": None,
+            "ticket_nominal_pct": None,
+            "ticket_real_pct": None,
+            "share_monto_actual_pct": None,
+            "share_monto_previo_pct": None,
+            "share_creditos_actual_pct": None,
+            "share_creditos_previo_pct": None,
+            "share_monto_delta_pp": None,
+            "share_creditos_delta_pp": None,
+        },
+        "executive_reading": "No hay datos suficientes para esta familia en la ventana comparable.",
+    }
+
+
+def _build_line_family_analysis(
+    current: pd.DataFrame,
+    previous: pd.DataFrame,
+    warnings: list[str],
+) -> dict[str, Any]:
+    families = []
+    total_current = _summarize_period(current)
+    total_previous = _summarize_period(previous)
+    total_monto_current = float(total_current["monto"] or 0.0)
+    total_monto_previous = float(total_previous["monto"] or 0.0)
+    total_creditos_current = float(total_current["creditos"] or 0.0)
+    total_creditos_previous = float(total_previous["creditos"] or 0.0)
+    aggregate_ticket_actual = total_current["ticket_promedio"]
+    current_norm = current.copy()
+    previous_norm = previous.copy()
+    current_norm["_linea_norm"] = current_norm["linea"].map(_normalize_text) if not current_norm.empty else []
+    previous_norm["_linea_norm"] = previous_norm["linea"].map(_normalize_text) if not previous_norm.empty else []
+
+    for family_config in LINE_FAMILIES:
+        terms = [_normalize_text(term) for term in family_config["match_terms"]]
+
+        if current_norm.empty:
+            current_family = current_norm.copy()
+        else:
+            current_family = current_norm[current_norm["_linea_norm"].map(lambda text: any(term in text for term in terms))]
+        if previous_norm.empty:
+            previous_family = previous_norm.copy()
+        else:
+            previous_family = previous_norm[previous_norm["_linea_norm"].map(lambda text: any(term in text for term in terms))]
+
+        if current_family.empty and previous_family.empty:
+            families.append(_empty_family_entry(family_config))
+            warnings.append(f"No se encontraron datos para la familia {family_config['family']} en la ventana comparable.")
+            continue
+
+        current_summary = _summarize_period(current_family)
+        previous_summary = _summarize_period(previous_family)
+        monto_actual = float(current_summary["monto"] or 0.0)
+        monto_previo = float(previous_summary["monto"] or 0.0)
+        creditos_actual = float(current_summary["creditos"] or 0.0)
+        creditos_previo = float(previous_summary["creditos"] or 0.0)
+        ticket_actual = current_summary["ticket_promedio"]
+        ticket_previo = previous_summary["ticket_promedio"]
+        monto_nominal_pct = _safe_pct(monto_actual, monto_previo)
+        creditos_pct = _safe_pct(creditos_actual, creditos_previo)
+        ticket_nominal_pct = None if ticket_actual is None or ticket_previo in (None, 0) else _safe_pct(ticket_actual, ticket_previo)
+        share_monto_actual = _safe_share(monto_actual, total_monto_current)
+        share_monto_previo = _safe_share(monto_previo, total_monto_previous)
+        share_creditos_actual = _safe_share(creditos_actual, total_creditos_current)
+        share_creditos_previo = _safe_share(creditos_previo, total_creditos_previous)
+        share_monto_delta = (
+            None if share_monto_actual is None or share_monto_previo is None else share_monto_actual - share_monto_previo
+        )
+        share_creditos_delta = (
+            None
+            if share_creditos_actual is None or share_creditos_previo is None
+            else share_creditos_actual - share_creditos_previo
+        )
+
+        families.append(
+            {
+                "family": family_config["family"],
+                "line_match": family_config["line_match"],
+                "current": {
+                    "monto": monto_actual,
+                    "creditos": creditos_actual,
+                    "ticket_promedio": ticket_actual,
+                },
+                "previous": {
+                    "monto": monto_previo,
+                    "creditos": creditos_previo,
+                    "ticket_promedio": ticket_previo,
+                },
+                "variations": {
+                    "monto_nominal_pct": monto_nominal_pct,
+                    "monto_real_pct": None,
+                    "creditos_pct": creditos_pct,
+                    "ticket_nominal_pct": ticket_nominal_pct,
+                    "ticket_real_pct": None,
+                    "share_monto_actual_pct": share_monto_actual,
+                    "share_monto_previo_pct": share_monto_previo,
+                    "share_creditos_actual_pct": share_creditos_actual,
+                    "share_creditos_previo_pct": share_creditos_previo,
+                    "share_monto_delta_pp": share_monto_delta,
+                    "share_creditos_delta_pp": share_creditos_delta,
+                },
+                "executive_reading": _family_reading(
+                    None,
+                    None,
+                    creditos_pct,
+                    share_monto_delta,
+                    share_creditos_delta,
+                    ticket_actual,
+                    aggregate_ticket_actual,
+                ),
+            }
+        )
+
+    return {"available": True, "families": _json_safe(families)}
+
+
 def _ranking(
     df: pd.DataFrame,
     group_col: str,
@@ -206,6 +420,7 @@ def build_extended_context(
         warnings.append(f"No se encontraron registros para la metrica {METRICA_CREDITOS} en el periodo previo consultado.")
     if creditos_actual == 0 or creditos_previo == 0:
         warnings.append("El ticket promedio no puede calcularse para periodos con cero creditos.")
+    line_family_analysis = _build_line_family_analysis(current, previous, warnings)
 
     estados_monto = _ranking(current, "nombre_estado", MONTO_COL, "monto") if has_current_monto else []
     estados_creditos = _ranking(current, "nombre_estado", CREDITOS_COL, "creditos") if has_current_creditos else []
@@ -265,6 +480,7 @@ def build_extended_context(
             ],
             "warnings": warnings,
         },
+        "line_family_analysis": line_family_analysis,
         "future_crosses": {
             "inflacion_inpc": "pendiente",
             "indice_shf": "pendiente",
@@ -309,5 +525,19 @@ def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any
         "ticket_variacion_nominal_pct": ticket_nominal,
         "ticket_variacion_real_pct": _real_variation_pct(ticket_nominal, factor),
     }
+    family_analysis = enriched.get("line_family_analysis", {})
+    for family in family_analysis.get("families", []) or []:
+        variations = family.get("variations", {})
+        variations["monto_real_pct"] = _real_variation_pct(variations.get("monto_nominal_pct"), factor)
+        variations["ticket_real_pct"] = _real_variation_pct(variations.get("ticket_nominal_pct"), factor)
+        family["executive_reading"] = _family_reading(
+            variations.get("monto_real_pct"),
+            variations.get("ticket_real_pct"),
+            variations.get("creditos_pct"),
+            variations.get("share_monto_delta_pp"),
+            variations.get("share_creditos_delta_pp"),
+            family.get("current", {}).get("ticket_promedio"),
+            enriched.get("summary", {}).get("ticket_promedio_actual"),
+        )
     future_crosses["inflacion_inpc"] = "integrado"
     return _json_safe(enriched)

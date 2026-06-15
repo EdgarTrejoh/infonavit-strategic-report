@@ -50,6 +50,33 @@ def _top_name(items: list[dict[str, Any]]) -> str:
     return str(items[0].get("nombre") or "N/D")
 
 
+def _family_metric_text(current: dict[str, Any], previous: dict[str, Any], variations: dict[str, Any]) -> list[str]:
+    return [
+        (
+            f"Monto colocado: {_money_mdp(current.get('monto'))} vs {_money_mdp(previous.get('monto'))}; "
+            f"variacion nominal {_pct(variations.get('monto_nominal_pct'))} y real "
+            f"{_pct(variations.get('monto_real_pct'))}."
+        ),
+        (
+            f"Creditos: {_number(current.get('creditos'))} vs {_number(previous.get('creditos'))}; "
+            f"variacion {_pct(variations.get('creditos_pct'))}."
+        ),
+        (
+            f"Ticket promedio: {_money(current.get('ticket_promedio'))} vs {_money(previous.get('ticket_promedio'))}; "
+            f"variacion nominal {_pct(variations.get('ticket_nominal_pct'))} y real "
+            f"{_pct(variations.get('ticket_real_pct'))}."
+        ),
+        (
+            f"Participacion en monto: {_pct(variations.get('share_monto_actual_pct'))} vs "
+            f"{_pct(variations.get('share_monto_previo_pct'))} del total."
+        ),
+        (
+            f"Participacion en creditos: {_pct(variations.get('share_creditos_actual_pct'))} vs "
+            f"{_pct(variations.get('share_creditos_previo_pct'))} del total."
+        ),
+    ]
+
+
 def _volume_ticket_interpretation(creditos_pct: Any, ticket_pct: Any) -> str:
     if creditos_pct is None or ticket_pct is None:
         return "No hay datos suficientes para interpretar la relacion entre volumen de creditos y ticket promedio."
@@ -103,6 +130,7 @@ def render_extended_report_markdown(report_json: dict[str, Any]) -> str:
     rankings = report_json.get("rankings", {})
     methodology = report_json.get("methodology", {})
     inflation = report_json.get("inflation_context", {}) or {}
+    line_family_analysis = report_json.get("line_family_analysis", {}) or {}
     warnings = methodology.get("warnings", []) or []
     notes = methodology.get("notes", []) or []
 
@@ -173,9 +201,27 @@ def render_extended_report_markdown(report_json: dict[str, Any]) -> str:
                 "",
             ]
         )
+    lines.append("## 3. Analisis por familia de linea")
+    families = line_family_analysis.get("families", []) or []
+    if families:
+        for family in families:
+            lines.extend(
+                [
+                    f"### {family.get('family', 'N/D')}",
+                    *_family_metric_text(
+                        family.get("current", {}) or {},
+                        family.get("previous", {}) or {},
+                        family.get("variations", {}) or {},
+                    ),
+                    f"Lectura: {family.get('executive_reading') or 'N/D'}",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(["No hay datos suficientes para el analisis por familia de linea.", ""])
     lines.extend(
         [
-            "## 3. Principales impulsores",
+            "## 4. Principales impulsores",
             (
                 f"Por monto, la linea lider es {drivers.get('linea_lider_monto') or 'N/D'}, "
                 f"el producto lider es {drivers.get('producto_lider_monto') or 'N/D'} y "
@@ -187,16 +233,16 @@ def render_extended_report_markdown(report_json: dict[str, Any]) -> str:
                 f"el estado lider es {drivers.get('estado_lider_creditos') or 'N/D'}."
             ),
             "",
-            "## 4. Rankings ejecutivos",
+            "## 5. Rankings ejecutivos",
             f"Estado lider por monto: {_top_name(rankings.get('estados_por_monto', []))}.",
             f"Estado lider por creditos: {_top_name(rankings.get('estados_por_creditos', []))}.",
             f"Linea lider por monto: {_top_name(rankings.get('lineas_por_monto', []))}.",
             f"Producto lider por monto: {_top_name(rankings.get('productos_por_monto', []))}.",
             "",
-            "## 5. Cruces futuros",
+            "## 6. Cruces futuros",
             "Indice SHF, salario minimo e IMSS derechohabientes quedan como cruces futuros pendientes. No se interpretan todavia como variables integradas.",
             "",
-            "## 6. Nota metodologica",
+            "## 7. Nota metodologica",
         ]
     )
     lines.extend(f"- {note}" for note in notes)

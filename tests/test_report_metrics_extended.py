@@ -75,6 +75,44 @@ def _inflation_payload():
     }
 
 
+def _line_family_df():
+    rows = []
+    families = [
+        ("Linea II: Adquisicion de vivienda nueva", 100.0, 10.0, 120.0, 12.0),
+        ("Linea II: Adquisicion de vivienda existente", 200.0, 20.0, 180.0, 18.0),
+        ("Linea IV: Mejoramientos", 50.0, 5.0, 75.0, 6.0),
+        ("Linea III: Construccion", 100.0, 10.0, 100.0, 10.0),
+    ]
+    for line, monto_prev, creditos_prev, monto_current, creditos_current in families:
+        for year, monto_total, creditos_total in [
+            (2025, monto_prev, creditos_prev),
+            (2026, monto_current, creditos_current),
+        ]:
+            rows.extend(
+                [
+                    {
+                        "anio": year,
+                        "mes": 1,
+                        "estado": 1,
+                        "linea": line,
+                        "producto": "Producto A",
+                        "metrica": METRICA_MONTO,
+                        "valor": monto_total,
+                    },
+                    {
+                        "anio": year,
+                        "mes": 1,
+                        "estado": 1,
+                        "linea": line,
+                        "producto": "Producto A",
+                        "metrica": METRICA_CREDITOS,
+                        "valor": creditos_total,
+                    },
+                ]
+            )
+    return pd.DataFrame(rows)
+
+
 def test_build_extended_analytic_df_calculates_ticket_promedio():
     analytic = build_extended_analytic_df(_long_metrics_df())
 
@@ -223,3 +261,121 @@ def test_extended_markdown_does_not_invent_real_figures_when_inflation_is_unavai
     assert "## 2. Contexto de inflacion comparable" in markdown
     assert "No hay datos suficientes para calcular variaciones reales" in markdown
     assert "4.21%" not in markdown
+
+
+def test_line_family_analysis_calculates_nominal_and_real_variations():
+    context = build_extended_context(_line_family_df(), current_year=2026, previous_year=2025, month_limit=1)
+    enriched = add_inflation_context(context, _inflation_payload())
+
+    families = {item["family"]: item for item in enriched["line_family_analysis"]["families"]}
+    nueva = families["Adquisicion de vivienda nueva"]
+    mejoramiento = families["Mejoramiento"]
+
+    expected_real = (((1 + 20.0 / 100) / _inflation_payload()["factor"]) - 1) * 100
+    assert enriched["line_family_analysis"]["available"] is True
+    assert nueva["current"]["monto"] == pytest.approx(120.0)
+    assert nueva["previous"]["monto"] == pytest.approx(100.0)
+    assert nueva["current"]["creditos"] == pytest.approx(12.0)
+    assert nueva["previous"]["creditos"] == pytest.approx(10.0)
+    assert nueva["current"]["ticket_promedio"] == pytest.approx(10.0)
+    assert nueva["previous"]["ticket_promedio"] == pytest.approx(10.0)
+    assert nueva["variations"]["monto_nominal_pct"] == pytest.approx(20.0)
+    assert nueva["variations"]["monto_real_pct"] == pytest.approx(expected_real)
+    assert nueva["variations"]["creditos_pct"] == pytest.approx(20.0)
+    assert nueva["variations"]["ticket_nominal_pct"] == pytest.approx(0.0)
+    assert nueva["variations"]["ticket_real_pct"] == pytest.approx((((1 + 0.0 / 100) / _inflation_payload()["factor"]) - 1) * 100)
+    assert "presiona a la baja el ticket promedio agregado por efecto mezcla" in nueva["executive_reading"]
+    assert "gano participacion en monto colocado" in nueva["executive_reading"]
+    assert mejoramiento["variations"]["monto_nominal_pct"] == pytest.approx(50.0)
+
+
+def test_line_family_analysis_calculates_shares_against_total_report():
+    context = build_extended_context(_line_family_df(), current_year=2026, previous_year=2025, month_limit=1)
+
+    families = {item["family"]: item for item in context["line_family_analysis"]["families"]}
+    nueva = families["Adquisicion de vivienda nueva"]
+
+    assert nueva["variations"]["share_monto_actual_pct"] == pytest.approx((120.0 / 475.0) * 100)
+    assert nueva["variations"]["share_monto_previo_pct"] == pytest.approx((100.0 / 450.0) * 100)
+    assert nueva["variations"]["share_creditos_actual_pct"] == pytest.approx((12.0 / 46.0) * 100)
+    assert nueva["variations"]["share_creditos_previo_pct"] == pytest.approx((10.0 / 45.0) * 100)
+    assert nueva["variations"]["share_monto_delta_pp"] == pytest.approx(((120.0 / 475.0) - (100.0 / 450.0)) * 100)
+    assert nueva["variations"]["share_creditos_delta_pp"] == pytest.approx(((12.0 / 46.0) - (10.0 / 45.0)) * 100)
+
+
+def test_line_family_analysis_returns_null_shares_when_total_is_zero():
+    df = _line_family_df()
+    df["valor"] = 0.0
+
+    context = build_extended_context(df, current_year=2026, previous_year=2025, month_limit=1)
+
+    family = context["line_family_analysis"]["families"][0]
+    assert family["variations"]["share_monto_actual_pct"] is None
+    assert family["variations"]["share_monto_previo_pct"] is None
+    assert family["variations"]["share_creditos_actual_pct"] is None
+    assert family["variations"]["share_creditos_previo_pct"] is None
+    assert family["variations"]["share_monto_delta_pp"] is None
+    assert family["variations"]["share_creditos_delta_pp"] is None
+
+
+def test_line_family_analysis_flags_mix_effect_when_credit_share_grows_with_lower_ticket():
+    rows = []
+    for year, family_monto, family_creditos, other_monto, other_creditos in [
+        (2025, 100.0, 10.0, 100.0, 5.0),
+        (2026, 120.0, 30.0, 100.0, 5.0),
+    ]:
+        for line, monto, creditos in [
+            ("Linea II: Adquisicion de vivienda nueva", family_monto, family_creditos),
+            ("Linea III: Construccion", other_monto, other_creditos),
+        ]:
+            rows.extend(
+                [
+                    {"anio": year, "mes": 1, "estado": 1, "linea": line, "producto": "Producto A", "metrica": METRICA_MONTO, "valor": monto},
+                    {"anio": year, "mes": 1, "estado": 1, "linea": line, "producto": "Producto A", "metrica": METRICA_CREDITOS, "valor": creditos},
+                ]
+            )
+    context = add_inflation_context(
+        build_extended_context(pd.DataFrame(rows), current_year=2026, previous_year=2025, month_limit=1),
+        _inflation_payload(),
+    )
+
+    nueva = {item["family"]: item for item in context["line_family_analysis"]["families"]}[
+        "Adquisicion de vivienda nueva"
+    ]
+
+    assert "presiona a la baja el ticket promedio agregado por efecto mezcla" in nueva["executive_reading"]
+
+
+def test_line_family_analysis_without_inflation_keeps_real_variations_null():
+    context = build_extended_context(_line_family_df(), current_year=2026, previous_year=2025, month_limit=1)
+
+    families = context["line_family_analysis"]["families"]
+
+    assert len(families) == 3
+    assert all(item["variations"]["monto_real_pct"] is None for item in families)
+    assert all(item["variations"]["ticket_real_pct"] is None for item in families)
+
+
+def test_line_family_analysis_missing_family_does_not_break_report():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+
+    families = {item["family"]: item for item in context["line_family_analysis"]["families"]}
+
+    assert families["Adquisicion de vivienda existente"]["current"]["monto"] is None
+    assert any("Adquisicion de vivienda existente" in warning for warning in context["methodology"]["warnings"])
+
+
+def test_extended_markdown_includes_three_line_families():
+    context = build_extended_context(_line_family_df(), current_year=2026, previous_year=2025, month_limit=1)
+    context = add_inflation_context(context, _inflation_payload())
+
+    _, markdown = generate_extended_report(context)
+
+    assert "## 3. Analisis por familia de linea" in markdown
+    assert "### Adquisicion de vivienda nueva" in markdown
+    assert "### Adquisicion de vivienda existente" in markdown
+    assert "### Mejoramiento" in markdown
+    assert "Participacion en monto:" in markdown
+    assert "Participacion en creditos:" in markdown
+    assert "variacion nominal" in markdown
+    assert "Lectura:" in markdown
