@@ -412,17 +412,25 @@ El reporte extendido calcula:
 - numero de creditos formalizados YTD comparable;
 - ticket promedio = monto / creditos;
 - variaciones absolutas y porcentuales contra anio previo;
+- inflacion promedio comparable si `INFLACION_COPILOT_URL` esta configurada;
+- variacion real del monto colocado y del ticket promedio usando ajuste compuesto;
 - rankings por estado, linea y producto;
 - narrativa deterministica sin IA.
 
+Integracion opcional de inflacion:
+
+- Variable: `INFLACION_COPILOT_URL`.
+- Servicio esperado: `GET /inflation/average-period?current_year=YYYY&previous_year=YYYY&month_limit=N`.
+- Formula de crecimiento real: `(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100`.
+- Si el servicio no esta configurado o no responde, el reporte sigue funcionando y agrega warning metodologico.
+
 Cruces futuros pendientes, no integrados todavia:
 
-- INPC / inflacion real;
 - indice SHF;
 - salario minimo;
 - IMSS derechohabientes.
 
-Estos cruces no deben interpretarse como ya integrados hasta que existan datos, validacion y contrato especifico.
+Estos cruces no deben interpretarse como ya integrados hasta que existan datos, validacion y contrato especifico. La inflacion INPC solo debe interpretarse como integrada cuando `inflation_context.available=true`.
 
 Si falta la metrica `Numero de creditos formalizados` en el periodo consultado, el reporte extendido no rellena creditos ni ticket con ceros silenciosos: devuelve valores nulos y agrega warning metodologico. La metrica real en base conserva acentos (`Número de créditos formalizados`).
 
@@ -440,6 +448,8 @@ Endpoints disponibles:
 - `GET /mini-report/extended/markdown`: genera reporte ejecutivo extendido Markdown; requiere `X-API-Key`.
 
 La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+
+Los endpoints extendidos pueden consultar el servicio externo configurado en `INFLACION_COPILOT_URL` para agregar `inflation_context`, inflacion promedio comparable y crecimiento real. Si la variable no existe o el servicio falla, devuelven el reporte nominal con warning controlado, sin interrumpir la respuesta.
 
 Dependencia operativa de datos:
 

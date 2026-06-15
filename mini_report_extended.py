@@ -76,6 +76,22 @@ def _volume_ticket_interpretation(creditos_pct: Any, ticket_pct: Any) -> str:
     )
 
 
+def _real_growth_read(metric_name: str, value: Any) -> str:
+    if value is None:
+        return f"No hay datos suficientes para interpretar la variacion real de {metric_name}."
+    if float(value) >= 0:
+        return f"{metric_name} crecio en terminos reales."
+    return f"{metric_name} disminuyo en terminos reales."
+
+
+def _ticket_real_read(value: Any) -> str:
+    if value is None:
+        return "No hay datos suficientes para interpretar el ticket promedio frente a la inflacion comparable."
+    if float(value) >= 0:
+        return "El ticket promedio supero la inflacion comparable."
+    return "El ticket promedio perdio terreno frente a la inflacion comparable."
+
+
 def build_extended_report_json(context: dict[str, Any]) -> dict[str, Any]:
     return _json_safe(context)
 
@@ -86,6 +102,7 @@ def render_extended_report_markdown(report_json: dict[str, Any]) -> str:
     drivers = report_json.get("drivers", {})
     rankings = report_json.get("rankings", {})
     methodology = report_json.get("methodology", {})
+    inflation = report_json.get("inflation_context", {}) or {}
     warnings = methodology.get("warnings", []) or []
     notes = methodology.get("notes", []) or []
 
@@ -124,29 +141,64 @@ def render_extended_report_markdown(report_json: dict[str, Any]) -> str:
             f"con variacion de {_pct(ticket_pct)}. {volume_ticket_read}"
         ),
         "",
-        "## 2. Principales impulsores",
-        (
-            f"Por monto, la linea lider es {drivers.get('linea_lider_monto') or 'N/D'}, "
-            f"el producto lider es {drivers.get('producto_lider_monto') or 'N/D'} y "
-            f"el estado lider es {drivers.get('estado_lider_monto') or 'N/D'}."
-        ),
-        (
-            f"Por creditos, la linea lider es {drivers.get('linea_lider_creditos') or 'N/D'}, "
-            f"el producto lider es {drivers.get('producto_lider_creditos') or 'N/D'} y "
-            f"el estado lider es {drivers.get('estado_lider_creditos') or 'N/D'}."
-        ),
-        "",
-        "## 3. Rankings ejecutivos",
-        f"Estado lider por monto: {_top_name(rankings.get('estados_por_monto', []))}.",
-        f"Estado lider por creditos: {_top_name(rankings.get('estados_por_creditos', []))}.",
-        f"Linea lider por monto: {_top_name(rankings.get('lineas_por_monto', []))}.",
-        f"Producto lider por monto: {_top_name(rankings.get('productos_por_monto', []))}.",
-        "",
-        "## 4. Cruces futuros",
-        "INPC/inflacion real, indice SHF, salario minimo e IMSS derechohabientes quedan como cruces futuros pendientes. No se interpretan todavia como variables integradas.",
-        "",
-        "## 5. Nota metodologica",
     ]
+    if inflation.get("available"):
+        monto_real = inflation.get("monto_variacion_real_pct")
+        ticket_real = inflation.get("ticket_variacion_real_pct")
+        lines.extend(
+            [
+                "## 2. Contexto de inflacion comparable",
+                (
+                    f"La inflacion promedio comparable del periodo fue "
+                    f"{_pct(inflation.get('inflation_pct'))}."
+                ),
+                (
+                    f"Con ajuste por inflacion, el monto colocado registro una variacion real de "
+                    f"{_pct(monto_real)} frente a {_pct(inflation.get('monto_variacion_nominal_pct'))} nominal. "
+                    f"{_real_growth_read('El monto colocado', monto_real)}"
+                ),
+                (
+                    f"El ticket promedio registro una variacion real de {_pct(ticket_real)} frente a "
+                    f"{_pct(inflation.get('ticket_variacion_nominal_pct'))} nominal. "
+                    f"{_ticket_real_read(ticket_real)}"
+                ),
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "## 2. Contexto de inflacion comparable",
+                "No hay datos suficientes para calcular variaciones reales porque el servicio de inflacion no estuvo disponible o no fue configurado.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## 3. Principales impulsores",
+            (
+                f"Por monto, la linea lider es {drivers.get('linea_lider_monto') or 'N/D'}, "
+                f"el producto lider es {drivers.get('producto_lider_monto') or 'N/D'} y "
+                f"el estado lider es {drivers.get('estado_lider_monto') or 'N/D'}."
+            ),
+            (
+                f"Por creditos, la linea lider es {drivers.get('linea_lider_creditos') or 'N/D'}, "
+                f"el producto lider es {drivers.get('producto_lider_creditos') or 'N/D'} y "
+                f"el estado lider es {drivers.get('estado_lider_creditos') or 'N/D'}."
+            ),
+            "",
+            "## 4. Rankings ejecutivos",
+            f"Estado lider por monto: {_top_name(rankings.get('estados_por_monto', []))}.",
+            f"Estado lider por creditos: {_top_name(rankings.get('estados_por_creditos', []))}.",
+            f"Linea lider por monto: {_top_name(rankings.get('lineas_por_monto', []))}.",
+            f"Producto lider por monto: {_top_name(rankings.get('productos_por_monto', []))}.",
+            "",
+            "## 5. Cruces futuros",
+            "Indice SHF, salario minimo e IMSS derechohabientes quedan como cruces futuros pendientes. No se interpretan todavia como variables integradas.",
+            "",
+            "## 6. Nota metodologica",
+        ]
+    )
     lines.extend(f"- {note}" for note in notes)
     if warnings:
         lines.extend(f"- Advertencia: {warning}" for warning in warnings)

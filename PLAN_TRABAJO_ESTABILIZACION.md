@@ -1240,9 +1240,12 @@ Se agregan `report_metrics_extended.py` y `mini_report_extended.py` para ampliar
 
 - Metricas: monto de credito INFONAVIT y numero de creditos formalizados.
 - Calcula monto, creditos, ticket promedio y variaciones YTD comparables.
+- Integra inflacion comparable de forma opcional mediante `INFLACION_COPILOT_URL`.
+- Calcula crecimiento real del monto colocado y del ticket promedio con formula compuesta: `(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100`.
 - Incluye rankings por estado, linea y producto.
 - Genera narrativa deterministica, sin OpenAI.
-- Deja como cruces futuros pendientes INPC/inflacion, indice SHF, salario minimo e IMSS derechohabientes.
+- Si el servicio de inflacion no esta configurado o no responde, el reporte sigue funcionando con `inflation_context.available=false` y warning metodologico.
+- Deja como cruces futuros pendientes indice SHF, salario minimo e IMSS derechohabientes.
 - No afirma esos cruces como integrados todavia.
 
 ## API minima FastAPI
@@ -1322,6 +1325,8 @@ Pendientes:
 | Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
 | Compatibilidad pandas 3 / SQLAlchemy en `data_access.py` | Si | Dependabot actualizo pandas a `3.0.3`; `pd.read_sql_query()` con SQLAlchemy provoco `TypeError` en Cloud Run. Se reemplaza la lectura por `connection.execute(text(...), params)` y DataFrame desde mappings, manteniendo bind parameters y contrato `df_master`. | Validar `/mini-report/json` en Cloud Run con `DATABASE_URL` read-only despues del deploy/actualizacion. |
 | Reporte extendido - creditos y ticket promedio | Si | Se corrige constante de la metrica real `Número de créditos formalizados`; la lectura extendida trae monto y creditos. Si falta una metrica en el periodo, se devuelve `null` y warning metodologico, no ceros silenciosos. Validacion read-only: 10,904 filas para 2025-2026, 5,452 por metrica. | Validar endpoint extendido en Cloud Run despues del siguiente despliegue. |
+
+| Reporte extendido - inflacion comparable | Si | Se agrega cliente `inflation_client.py` para consultar `inflacion-copilot-api`; si hay respuesta valida, el JSON agrega `inflation_context`, inflacion comparable, variacion nominal y variacion real de monto/ticket. Si falla o no esta configurado, el reporte continua con warning controlado. | Configurar `INFLACION_COPILOT_URL` en Cloud Run y validar endpoint extendido despues del siguiente despliegue. |
 
 Prueba real de punta a punta:
 

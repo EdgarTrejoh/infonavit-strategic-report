@@ -126,6 +126,8 @@ def _patch_extended_report_flow(monkeypatch):
         "build_extended_context",
         lambda df, current_year, previous_year, month_limit=None: {"period": {"current_year": current_year}},
     )
+    monkeypatch.setattr(api_main, "fetch_average_period_inflation", lambda **kwargs: None)
+    monkeypatch.setattr(api_main, "add_inflation_context", lambda context, inflation_data: context)
     monkeypatch.setattr(
         api_main,
         "generate_extended_report",
@@ -318,6 +320,37 @@ def test_mini_report_extended_markdown_returns_plain_text(monkeypatch):
     assert response.headers["content-type"].startswith("text/plain")
     assert "Reporte ejecutivo INFONAVIT extendido" in response.text
     assert "Ticket promedio" in response.text
+
+
+def test_mini_report_extended_json_uses_inflation_context_when_available(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+    monkeypatch.setattr(api_main, "load_long_metrics_from_db", lambda engine, start_year=None, end_year=None: _fake_df_master())
+    monkeypatch.setattr(
+        api_main,
+        "build_extended_context",
+        lambda df, current_year, previous_year, month_limit=None: {
+            "period": {"current_year": current_year, "previous_year": previous_year, "month_limit": 4},
+            "summary": {"monto_variacion_pct": 20.0, "ticket_promedio_variacion_pct": -5.0},
+        },
+    )
+    monkeypatch.setattr(
+        api_main,
+        "fetch_average_period_inflation",
+        lambda current_year, previous_year, month_limit: {"factor": 1.04},
+    )
+
+    def fake_add_inflation_context(context, inflation_data):
+        context["inflation_context"] = {"available": True, "factor": inflation_data["factor"]}
+        return context
+
+    monkeypatch.setattr(api_main, "add_inflation_context", fake_add_inflation_context)
+    monkeypatch.setattr(api_main, "generate_extended_report", lambda context, output_dir=None: (context, "markdown"))
+
+    response = _client().get("/mini-report/extended/json", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["inflation_context"] == {"available": True, "factor": 1.04}
 
 
 def test_mini_report_markdown_returns_plain_text(monkeypatch):

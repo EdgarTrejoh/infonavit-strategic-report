@@ -109,6 +109,7 @@ Notas operativas:
 - `/health` permanece publico.
 - `/db/health`, `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren header `X-API-Key`.
 - La variable `INFONAVIT_API_KEY` debe estar configurada en `.env`, PowerShell o variable segura del entorno.
+- La variable opcional `INFLACION_COPILOT_URL` permite agregar inflacion comparable y crecimiento real al reporte extendido.
 - `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren PostgreSQL/Supabase disponible.
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
@@ -203,7 +204,15 @@ outputs/mini_report/mini_report.md
 
 ## 10. Generar mini reporte extendido local desde Supabase
 
-Este comando lee Supabase/PostgreSQL con `DATABASE_URL_READONLY`, carga monto y creditos, genera contexto analitico extendido y guarda salidas locales en `outputs/mini_report/`.
+Este comando lee Supabase/PostgreSQL con `DATABASE_URL_READONLY`, carga monto y creditos, consulta inflacion si `INFLACION_COPILOT_URL` esta configurada, genera contexto analitico extendido y guarda salidas locales en `outputs/mini_report/`.
+
+Para integrar inflacion comparable en local:
+
+```powershell
+$env:INFLACION_COPILOT_URL="https://inflacion-copilot-api-490229283844.us-central1.run.app"
+```
+
+Si la variable no existe o el servicio no responde, el reporte extendido se genera de todos modos con `inflation_context.available=false` y warning metodologico.
 
 ```powershell
 @'
@@ -216,11 +225,19 @@ os.environ["DATABASE_URL"] = os.getenv("DATABASE_URL_READONLY", "")
 
 from database import engine
 from data_access import load_long_metrics_from_db
-from report_metrics_extended import build_extended_context
+from inflation_client import fetch_average_period_inflation
+from report_metrics_extended import add_inflation_context, build_extended_context
 from mini_report_extended import generate_extended_report
 
 raw = load_long_metrics_from_db(engine, start_year=2025, end_year=2026)
 context = build_extended_context(raw, current_year=2026, previous_year=2025)
+period = context["period"]
+inflation = fetch_average_period_inflation(
+    current_year=period["current_year"],
+    previous_year=period["previous_year"],
+    month_limit=period["month_limit"],
+)
+context = add_inflation_context(context, inflation)
 report_json, markdown = generate_extended_report(context, output_dir="outputs/mini_report")
 json.dumps(report_json, ensure_ascii=False)
 
@@ -230,6 +247,9 @@ print("markdown_path=outputs/mini_report/mini_report_extended.md")
 print("markdown_chars=", len(markdown))
 print("creditos_actual=", report_json["summary"]["creditos_actual"])
 print("ticket_promedio_actual=", report_json["summary"]["ticket_promedio_actual"])
+print("inflation_available=", report_json["inflation_context"]["available"])
+print("inflation_pct=", report_json["inflation_context"].get("inflation_pct"))
+print("monto_variacion_real_pct=", report_json["inflation_context"].get("monto_variacion_real_pct"))
 '@ | python -
 ```
 
@@ -246,6 +266,13 @@ Validacion esperada con datos 2025-2026 cargados:
 raw_shape= (10904, 7)
 creditos_actual > 0
 ticket_promedio_actual calculado
+inflation_available=True si `INFLACION_COPILOT_URL` esta configurada y disponible
+```
+
+La formula de crecimiento real usada por el reporte extendido es:
+
+```text
+(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100
 ```
 
 ## 11. Retencion / higiene operativa

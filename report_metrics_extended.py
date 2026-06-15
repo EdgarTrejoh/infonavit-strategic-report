@@ -11,6 +11,10 @@ from data_access import METRICA_CREDITOS, METRICA_MONTO
 MONTO_COL = "Monto"
 CREDITOS_COL = "Creditos"
 TICKET_COL = "Ticket_Promedio"
+INFLATION_UNAVAILABLE_REASON = "Inflation service not configured or unavailable"
+INFLATION_WARNING = (
+    "No se integro inflacion comparable porque el servicio de inflacion no estuvo disponible o no fue configurado."
+)
 
 
 def _json_safe(value: Any) -> Any:
@@ -41,6 +45,12 @@ def _safe_div(numerator: float, denominator: float) -> float | None:
     if denominator == 0:
         return None
     return numerator / denominator
+
+
+def _real_variation_pct(nominal_pct: float | None, inflation_factor: float | None) -> float | None:
+    if nominal_pct is None or inflation_factor in (None, 0):
+        return None
+    return (((1 + float(nominal_pct) / 100) / float(inflation_factor)) - 1) * 100
 
 
 def _estado_catalog() -> dict[int, str]:
@@ -263,3 +273,41 @@ def build_extended_context(
         },
     }
     return _json_safe(context)
+
+
+def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any] | None) -> dict[str, Any]:
+    enriched = _json_safe(context.copy())
+    methodology = enriched.setdefault("methodology", {})
+    warnings = methodology.setdefault("warnings", [])
+    future_crosses = enriched.setdefault("future_crosses", {})
+
+    if not inflation_data:
+        enriched["inflation_context"] = {
+            "available": False,
+            "reason": INFLATION_UNAVAILABLE_REASON,
+        }
+        if INFLATION_WARNING not in warnings:
+            warnings.append(INFLATION_WARNING)
+        return _json_safe(enriched)
+
+    summary = enriched.get("summary", {})
+    factor = float(inflation_data["factor"])
+    monto_nominal = summary.get("monto_variacion_pct")
+    ticket_nominal = summary.get("ticket_promedio_variacion_pct")
+
+    enriched["inflation_context"] = {
+        "available": True,
+        "source": f"{inflation_data.get('source', 'N/D')} via inflacion-copilot-api",
+        "indicator": inflation_data.get("indicator"),
+        "method": inflation_data.get("method"),
+        "current_period": inflation_data.get("current_period"),
+        "previous_period": inflation_data.get("previous_period"),
+        "factor": factor,
+        "inflation_pct": inflation_data.get("inflation_pct"),
+        "monto_variacion_nominal_pct": monto_nominal,
+        "monto_variacion_real_pct": _real_variation_pct(monto_nominal, factor),
+        "ticket_variacion_nominal_pct": ticket_nominal,
+        "ticket_variacion_real_pct": _real_variation_pct(ticket_nominal, factor),
+    }
+    future_crosses["inflacion_inpc"] = "integrado"
+    return _json_safe(enriched)

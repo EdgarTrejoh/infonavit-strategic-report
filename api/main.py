@@ -12,9 +12,10 @@ from fastapi.responses import PlainTextResponse
 
 from data_access import load_df_master_from_db, load_long_metrics_from_db, validate_df_master_contract
 from database import engine, health_check
+from inflation_client import fetch_average_period_inflation
 from mini_report_extended import generate_extended_report
 from mini_report import generate_mini_report
-from report_metrics_extended import build_extended_context
+from report_metrics_extended import add_inflation_context, build_extended_context
 from report_metrics import build_ai_context
 
 logger = logging.getLogger(__name__)
@@ -164,6 +165,13 @@ def _build_extended_report(
             previous_year=previous_year,
             month_limit=month_limit,
         )
+        months_used = int(context.get("period", {}).get("month_limit") or month_limit or 12)
+        inflation_data = fetch_average_period_inflation(
+            current_year=current_year,
+            previous_year=previous_year,
+            month_limit=months_used,
+        )
+        context = add_inflation_context(context, inflation_data)
         metrics_ms = round((time.perf_counter() - metrics_start) * 1000, 2)
 
         render_start = time.perf_counter()

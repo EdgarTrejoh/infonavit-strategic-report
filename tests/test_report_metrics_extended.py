@@ -5,7 +5,7 @@ import pytest
 
 from data_access import METRICA_CREDITOS, METRICA_MONTO
 from mini_report_extended import generate_extended_report
-from report_metrics_extended import build_extended_analytic_df, build_extended_context
+from report_metrics_extended import add_inflation_context, build_extended_analytic_df, build_extended_context
 
 
 def _long_metrics_df():
@@ -57,6 +57,22 @@ def _long_metrics_df():
         ]
     )
     return pd.DataFrame(rows)
+
+
+def _inflation_payload():
+    return {
+        "current_year": 2026,
+        "previous_year": 2025,
+        "month_limit": 4,
+        "comparability": "YTD comparable",
+        "current_period": {"start_date": "2026-01-01", "end_date": "2026-04-01", "avg_inpc": 144.8175},
+        "previous_period": {"start_date": "2025-01-01", "end_date": "2025-04-01", "avg_inpc": 138.9625},
+        "factor": 1.0421336691553478,
+        "inflation_pct": 4.2133669155347775,
+        "source": "INEGI / BigQuery",
+        "indicator": "INPC - General",
+        "method": "inflation_pct = ((avg_inpc_current_period / avg_inpc_previous_period) - 1) * 100",
+    }
 
 
 def test_build_extended_analytic_df_calculates_ticket_promedio():
@@ -155,3 +171,55 @@ def test_extended_markdown_explains_credit_growth_with_ticket_decline():
     assert "El numero de creditos crecio, mientras que el ticket promedio disminuyo" in markdown
     assert "mayor volumen de creditos" in markdown
     assert "El numero de creditos crecio igual o mas rapido que el ticket promedio" not in markdown
+
+
+def test_add_inflation_context_calculates_real_variations_with_compound_formula():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+
+    enriched = add_inflation_context(context, _inflation_payload())
+    inflation = enriched["inflation_context"]
+
+    expected_monto_real = (((1 + 40.0 / 100) / _inflation_payload()["factor"]) - 1) * 100
+    expected_ticket_real = (((1 + 40.0 / 100) / _inflation_payload()["factor"]) - 1) * 100
+    assert inflation["available"] is True
+    assert inflation["inflation_pct"] == pytest.approx(4.2133669155347775)
+    assert inflation["monto_variacion_nominal_pct"] == pytest.approx(40.0)
+    assert inflation["monto_variacion_real_pct"] == pytest.approx(expected_monto_real)
+    assert inflation["ticket_variacion_nominal_pct"] == pytest.approx(40.0)
+    assert inflation["ticket_variacion_real_pct"] == pytest.approx(expected_ticket_real)
+    json.dumps(enriched)
+
+
+def test_add_inflation_context_warns_when_service_is_unavailable():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+
+    enriched = add_inflation_context(context, None)
+
+    assert enriched["inflation_context"] == {
+        "available": False,
+        "reason": "Inflation service not configured or unavailable",
+    }
+    assert any("No se integro inflacion comparable" in warning for warning in enriched["methodology"]["warnings"])
+
+
+def test_extended_markdown_includes_inflation_section_when_available():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+    context = add_inflation_context(context, _inflation_payload())
+
+    _, markdown = generate_extended_report(context)
+
+    assert "## 2. Contexto de inflacion comparable" in markdown
+    assert "La inflacion promedio comparable del periodo fue 4.21%" in markdown
+    assert "variacion real" in markdown
+    assert "El ticket promedio supero la inflacion comparable" in markdown
+
+
+def test_extended_markdown_does_not_invent_real_figures_when_inflation_is_unavailable():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+    context = add_inflation_context(context, None)
+
+    _, markdown = generate_extended_report(context)
+
+    assert "## 2. Contexto de inflacion comparable" in markdown
+    assert "No hay datos suficientes para calcular variaciones reales" in markdown
+    assert "4.21%" not in markdown
