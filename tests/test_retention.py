@@ -99,6 +99,56 @@ def test_retention_skips_paths_outside_allowed_dirs(tmp_path, monkeypatch):
     assert outside_file.exists()
 
 
+def test_retention_skips_project_root_path(tmp_path, monkeypatch):
+    _configure_retention(monkeypatch, tmp_path, enabled=True, dry_run=False)
+    old_file = tmp_path / "old.xlsx"
+    _make_old_file(old_file, days_old=100)
+    monkeypatch.setattr(config, "ETL_RUTA_WORK", str(tmp_path))
+
+    result = apply_retention_policy()
+
+    assert result == []
+    assert old_file.exists()
+
+
+def test_retention_skips_drive_or_system_root_path(tmp_path, monkeypatch):
+    _configure_retention(monkeypatch, tmp_path, enabled=True, dry_run=False)
+    old_file = tmp_path / "datos_work" / "old.xlsx"
+    _make_old_file(old_file, days_old=100)
+    monkeypatch.setattr(config, "ETL_RUTA_WORK", str(Path(tmp_path.anchor)))
+
+    result = apply_retention_policy()
+
+    assert result == []
+    assert old_file.exists()
+
+
+def test_retention_skips_home_path(tmp_path, monkeypatch):
+    _configure_retention(monkeypatch, tmp_path, enabled=True, dry_run=False)
+    fake_home = tmp_path / "home"
+    old_file = fake_home / "old.xlsx"
+    _make_old_file(old_file, days_old=100)
+    monkeypatch.setattr(retention.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.setattr(config, "ETL_RUTA_WORK", str(fake_home))
+
+    result = apply_retention_policy()
+
+    assert result == []
+    assert old_file.exists()
+
+
+def test_retention_skips_traversal_outside_safe_dirs(tmp_path, monkeypatch):
+    _configure_retention(monkeypatch, tmp_path, enabled=True, dry_run=False)
+    outside_file = tmp_path / "datos_entrada" / "old.xlsx"
+    _make_old_file(outside_file, days_old=100)
+    monkeypatch.setattr(config, "ETL_RUTA_WORK", "datos_work/../datos_entrada")
+
+    result = apply_retention_policy()
+
+    assert result == []
+    assert outside_file.exists()
+
+
 def test_retention_cli_dry_run_keeps_expired_files(tmp_path, monkeypatch, capsys):
     _configure_retention(monkeypatch, tmp_path, enabled=False, dry_run=False)
     old_file = tmp_path / "datos_work" / "old.xlsx"
