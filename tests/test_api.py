@@ -102,6 +102,21 @@ def _fake_extended_markdown():
     )
 
 
+def _fake_ai_insight():
+    return {
+        "available": True,
+        "executive_thesis": "Tesis ejecutiva.",
+        "key_findings": ["Hallazgo uno", "Hallazgo dos", "Hallazgo tres"],
+        "mix_effect_reading": "Lectura de efecto mezcla.",
+        "real_vs_nominal_reading": "Lectura real contra nominal.",
+        "risks_or_caveats": ["Riesgo uno", "Riesgo dos"],
+        "recommended_next_crosses": ["indice SHF", "salario minimo", "IMSS derechohabientes"],
+        "committee_questions": ["Pregunta uno?", "Pregunta dos?", "Pregunta tres?"],
+        "linkedin_angle": "Angulo breve.",
+        "confidence": "medium",
+    }
+
+
 def _patch_report_flow(monkeypatch):
     monkeypatch.setattr(api_main, "engine", object())
     monkeypatch.setattr(api_main, "load_df_master_from_db", lambda engine, start_year=None, end_year=None: _fake_df_master())
@@ -320,6 +335,56 @@ def test_mini_report_extended_markdown_returns_plain_text(monkeypatch):
     assert response.headers["content-type"].startswith("text/plain")
     assert "Reporte ejecutivo INFONAVIT extendido" in response.text
     assert "Ticket promedio" in response.text
+
+
+def test_mini_report_ai_json_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/ai/json")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_ai_markdown_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+
+    response = _client().get("/mini-report/ai/markdown")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_ai_json_returns_ai_insight_with_mock(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+    monkeypatch.setattr(api_main, "generate_ai_extended_insight", lambda extended_report: _fake_ai_insight())
+
+    response = _client().get("/mini-report/ai/json", headers=_auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "period" in payload
+    assert "extended_report_summary" in payload
+    assert payload["ai_insight"]["available"] is True
+    assert payload["ai_insight"]["confidence"] == "medium"
+
+
+def test_mini_report_ai_markdown_renders_expected_sections(monkeypatch):
+    _configure_api_key(monkeypatch)
+    _patch_extended_report_flow(monkeypatch)
+    monkeypatch.setattr(api_main, "generate_ai_extended_insight", lambda extended_report: _fake_ai_insight())
+
+    response = _client().get("/mini-report/ai/markdown", headers=_auth_headers())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    assert "Analisis asistido INFONAVIT" in response.text
+    assert "Tesis ejecutiva" in response.text
+    assert "Hallazgos clave" in response.text
+    assert "Preguntas para comite" in response.text
 
 
 def test_mini_report_extended_json_uses_inflation_context_when_available(monkeypatch):

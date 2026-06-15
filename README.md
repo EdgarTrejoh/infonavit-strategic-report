@@ -498,10 +498,44 @@ Endpoints disponibles:
 - `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
 - `GET /mini-report/extended/json`: genera reporte ejecutivo extendido JSON; requiere `X-API-Key`.
 - `GET /mini-report/extended/markdown`: genera reporte ejecutivo extendido Markdown; requiere `X-API-Key`.
+- `GET /mini-report/ai/json`: genera interpretacion ejecutiva asistida por IA sobre el JSON extendido; requiere `X-API-Key`.
+- `GET /mini-report/ai/markdown`: genera Markdown con interpretacion ejecutiva asistida por IA; requiere `X-API-Key`.
 
-La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+La API integra una capa IA opcional para interpretar el JSON extendido; no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
 
 Los endpoints extendidos pueden consultar el servicio externo configurado en `INFLACION_COPILOT_URL` para agregar `inflation_context`, inflacion promedio comparable y crecimiento real. Si la variable no existe o el servicio falla, devuelven el reporte nominal con warning controlado, sin interrumpir la respuesta.
+
+### Analisis asistido por IA
+
+La capa `ai_extended_report.py` consume el JSON extendido ya calculado y produce una interpretacion ejecutiva estructurada. La IA no calcula metricas, no consulta la base de datos, no llama servicios externos de datos y no modifica el reporte deterministico.
+
+Variables:
+
+- `OPENAI_API_KEY`: habilita la llamada opcional a OpenAI.
+- `OPENAI_MODEL`: modelo opcional; default `gpt-4.1-mini`.
+
+Si `OPENAI_API_KEY` no esta configurada, los endpoints IA responden con:
+
+```json
+{"available": false, "reason": "AI service not configured"}
+```
+
+Reglas operativas:
+
+- No registrar prompts completos en logs.
+- No enviar credenciales, headers, API keys, connection strings ni variables de entorno.
+- No afirmar causalidad que no este sustentada por el JSON.
+- Si un cruce no esta integrado, debe mantenerse como cruce pendiente.
+
+Ejemplo local:
+
+```powershell
+$env:OPENAI_API_KEY="..."
+$env:OPENAI_MODEL="gpt-4.1-mini"
+Invoke-RestMethod `
+  "http://127.0.0.1:8010/mini-report/ai/json?current_year=2026&previous_year=2025&month_limit=4" `
+  -Headers @{ "X-API-Key" = "TU_API_KEY_LOCAL" }
+```
 
 Dependencia operativa de datos:
 

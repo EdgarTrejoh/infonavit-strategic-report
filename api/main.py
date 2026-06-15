@@ -10,6 +10,7 @@ import uuid
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
+from ai_extended_report import build_ai_response_payload, generate_ai_extended_insight, render_ai_insight_markdown
 from data_access import load_df_master_from_db, load_long_metrics_from_db, validate_df_master_contract
 from database import engine, health_check
 from inflation_client import fetch_average_period_inflation
@@ -281,3 +282,49 @@ def mini_report_extended_markdown(
         request_id=getattr(request.state, "request_id", None),
     )
     return markdown
+
+
+@app.get("/mini-report/ai/json")
+def mini_report_ai_json(
+    request: Request,
+    _: None = Depends(require_api_key),
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
+    month_limit: int | None = Query(None, ge=1, le=12),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
+    extended_report, _ = _build_extended_report(
+        current_year=current_year,
+        previous_year=previous_year,
+        month_limit=month_limit,
+        start_year=start_year,
+        end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    ai_insight = generate_ai_extended_insight(extended_report)
+    return build_ai_response_payload(extended_report, ai_insight)
+
+
+@app.get("/mini-report/ai/markdown", response_class=PlainTextResponse)
+def mini_report_ai_markdown(
+    request: Request,
+    _: None = Depends(require_api_key),
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
+    month_limit: int | None = Query(None, ge=1, le=12),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
+    extended_report, _ = _build_extended_report(
+        current_year=current_year,
+        previous_year=previous_year,
+        month_limit=month_limit,
+        start_year=start_year,
+        end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    ai_insight = generate_ai_extended_insight(extended_report)
+    return render_ai_insight_markdown(build_ai_response_payload(extended_report, ai_insight))

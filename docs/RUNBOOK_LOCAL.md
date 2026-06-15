@@ -103,6 +103,18 @@ curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/ext
 curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/extended/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
 ```
 
+### Analisis asistido IA JSON
+
+```powershell
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/ai/json?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
+### Analisis asistido IA Markdown
+
+```powershell
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/mini-report/ai/markdown?current_year=2026&previous_year=2025&start_year=2025&end_year=2026"
+```
+
 Notas operativas:
 
 - La API FastAPI no lee directamente del CSV.
@@ -117,6 +129,8 @@ Notas operativas:
 - La API debe usar `DATABASE_URL` con usuario read-only.
 - El migrador debe usar una credencial admin/migration separada.
 - Cloud Run debe recibir solo la credencial read-only; la credencial admin no debe configurarse en Cloud Run.
+- Los endpoints IA son opcionales. Si `OPENAI_API_KEY` no esta configurada, responden con fallback `AI service not configured`.
+- La IA consume el JSON extendido ya calculado; no calcula metricas, no consulta base y no modifica datos.
 
 ## 5. Construir imagen Docker
 
@@ -298,6 +312,35 @@ Cada familia reporta monto, creditos, ticket promedio, variaciones nominales/rea
 
 ## 11. Retencion / higiene operativa
 
+## 11. Analisis asistido por IA local
+
+Para habilitar IA localmente:
+
+```powershell
+$env:OPENAI_API_KEY="..."
+$env:OPENAI_MODEL="gpt-4.1-mini"
+```
+
+Probar JSON:
+
+```powershell
+Invoke-RestMethod `
+  "http://127.0.0.1:8080/mini-report/ai/json?current_year=2026&previous_year=2025&month_limit=4" `
+  -Headers @{ "X-API-Key" = "change_me_local_only" }
+```
+
+Probar Markdown:
+
+```powershell
+Invoke-RestMethod `
+  "http://127.0.0.1:8080/mini-report/ai/markdown?current_year=2026&previous_year=2025&month_limit=4" `
+  -Headers @{ "X-API-Key" = "change_me_local_only" }
+```
+
+No registrar prompts completos, `OPENAI_API_KEY`, `INFONAVIT_API_KEY`, `DATABASE_URL` ni connection strings.
+
+## 12. Retencion / higiene operativa
+
 Dry-run seguro, sin borrar archivos:
 
 ```powershell
@@ -320,7 +363,7 @@ La retencion solo opera sobre:
 
 No toca `datos_entrada/`, `SII_concentrado_v3.csv`, `.env`, `.venv/` ni salidas finales.
 
-## 12. Usuarios de base por minimo privilegio
+## 13. Usuarios de base por minimo privilegio
 
 Plantilla SQL sugerida:
 
@@ -358,7 +401,7 @@ DELETE FROM public.infonavit_historico WHERE false;
 ROLLBACK;
 ```
 
-## 13. Migracion PostgreSQL manual
+## 14. Migracion PostgreSQL manual
 
 El migrador esta protegido contra ejecucion accidental.
 
@@ -380,12 +423,13 @@ Para ejecutar una migracion real, usar confirmacion explicita:
 python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 ```
 
-## 14. Notas de seguridad
+## 15. Notas de seguridad
 
 - No compartir `.env`.
 - No versionar `.env`.
 - No imprimir `DATABASE_URL`.
 - No imprimir ni compartir `INFONAVIT_API_KEY`.
+- No imprimir ni compartir `OPENAI_API_KEY`.
 - No imprimir usuario, password, host completo ni connection string.
 - No ejecutar migraciones por accidente.
 - Confirmar que `DATABASE_URL` apunta al ambiente correcto antes de cualquier operacion.
