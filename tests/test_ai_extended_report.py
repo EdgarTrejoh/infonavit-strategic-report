@@ -41,6 +41,12 @@ def _extended_report():
         "methodology": {"warnings": ["Comparacion YTD: no compara anios completos."]},
         "future_crosses": [
             {
+                "key": "inflacion_inpc",
+                "label": "INPC general",
+                "status": "integrado",
+                "intended_use": "Deflactar variaciones nominales.",
+            },
+            {
                 "key": "indice_shf",
                 "label": "Índice SHF de Precios de la Vivienda",
                 "status": "pendiente",
@@ -185,6 +191,34 @@ def test_generate_ai_extended_insight_uses_full_future_cross_labels(monkeypatch)
 
     assert "Índice SHF de Precios de la Vivienda" in result["recommended_next_crosses"]
     assert "indice SHF" not in result["recommended_next_crosses"]
+    assert "Salario minimo" in result["recommended_next_crosses"]
+    assert "Derechohabientes IMSS" in result["recommended_next_crosses"]
+
+
+def test_generate_ai_extended_insight_recommended_crosses_only_uses_pending_future_crosses(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai(
+        monkeypatch,
+        _ai_payload(
+            recommended_next_crosses=[
+                "composicion por familia",
+                "monto colocado",
+                "creditos",
+                "ticket promedio",
+                "rankings por estado",
+                "inflacion INPC",
+                "indice SHF",
+            ]
+        ),
+    )
+
+    result = generate_ai_extended_insight(_extended_report())
+
+    assert result["recommended_next_crosses"] == [
+        "Índice SHF de Precios de la Vivienda",
+        "Salario minimo",
+        "Derechohabientes IMSS",
+    ]
 
 
 def test_generate_ai_extended_insight_filters_unsupported_terms(monkeypatch):

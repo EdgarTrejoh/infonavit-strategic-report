@@ -120,41 +120,60 @@ def _contains_unsupported_terms(text: str, extended_report: dict[str, Any]) -> b
     return False
 
 
-def _future_cross_labels(extended_report: dict[str, Any]) -> list[str]:
+def _future_cross_items(extended_report: dict[str, Any]) -> list[dict[str, str]]:
     future_crosses = extended_report.get("future_crosses", [])
     if isinstance(future_crosses, list):
         return [
-            str(item["label"])
+            {
+                "key": str(item.get("key", "")),
+                "label": str(item["label"]),
+            }
             for item in future_crosses
             if isinstance(item, dict) and item.get("label") and item.get("status") != "integrado"
         ]
     if isinstance(future_crosses, dict):
-        labels = []
+        items = []
         if "indice_shf" in future_crosses:
-            labels.append("Índice SHF de Precios de la Vivienda")
+            items.append({"key": "indice_shf", "label": "Índice SHF de Precios de la Vivienda"})
         if "salario_minimo" in future_crosses:
-            labels.append("Salario minimo")
+            items.append({"key": "salario_minimo", "label": "Salario minimo"})
         if "imss_derechohabientes" in future_crosses:
-            labels.append("Derechohabientes IMSS")
-        return labels
+            items.append({"key": "imss_derechohabientes", "label": "Derechohabientes IMSS"})
+        return items
     return []
 
 
 def _normalize_recommended_crosses(items: list[str], extended_report: dict[str, Any]) -> list[str]:
-    labels = _future_cross_labels(extended_report)
-    normalized_labels = {_normalize_for_match(label): label for label in labels}
+    pending_items = _future_cross_items(extended_report)
+    if not pending_items:
+        return []
+
     normalized = []
     for item in items:
         text = str(item)
         normalized_text = _normalize_for_match(text)
         replacement = None
-        if "shf" in normalized_text:
-            replacement = next((label for key, label in normalized_labels.items() if "shf" in key), None)
-        elif "salario" in normalized_text:
-            replacement = next((label for key, label in normalized_labels.items() if "salario" in key), None)
-        elif "imss" in normalized_text or "derechohabientes" in normalized_text:
-            replacement = next((label for key, label in normalized_labels.items() if "imss" in key), None)
-        normalized.append(replacement or text)
+        for pending in pending_items:
+            key = _normalize_for_match(pending["key"])
+            label = _normalize_for_match(pending["label"])
+            if key and key in normalized_text or label and label in normalized_text:
+                replacement = pending["label"]
+                break
+            if "shf" in normalized_text and "shf" in label:
+                replacement = pending["label"]
+                break
+            if "salario" in normalized_text and "salario" in label:
+                replacement = pending["label"]
+                break
+            if ("imss" in normalized_text or "derechohabientes" in normalized_text) and "imss" in label:
+                replacement = pending["label"]
+                break
+        if replacement and replacement not in normalized:
+            normalized.append(replacement)
+
+    for pending in pending_items:
+        if pending["label"] not in normalized:
+            normalized.append(pending["label"])
     return normalized
 
 
