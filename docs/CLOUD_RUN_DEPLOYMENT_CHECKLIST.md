@@ -1,6 +1,16 @@
 # Cloud Run Deployment Checklist - API INFONAVIT
 
-Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Run. No ejecutar despliegues hasta cerrar seguridad, costos y secretos.
+Este documento guia despliegues y actualizaciones controladas de la API FastAPI en Google Cloud Run.
+
+Estado actual:
+
+- Servicio Cloud Run publicado: `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
+- API de solo lectura.
+- `/health` publico.
+- Endpoints operativos protegidos con `X-API-Key`.
+- Documentacion FastAPI desactivada en produccion con `ENVIRONMENT=production`.
+- Supabase PostgreSQL es la fuente de datos inicial.
+- `inflacion-copilot-api` es dependencia opcional para inflacion comparable en el reporte extendido.
 
 ## 1. Pre-requisitos
 
@@ -31,6 +41,7 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 
 - `DATABASE_URL` no debe ir en Git.
 - `INFONAVIT_API_KEY` no debe ir en Git.
+- `INFLACION_COPILOT_URL` no es secreto, pero debe configurarse como variable de entorno controlada si se desea inflacion comparable.
 - No usar `.env` en produccion.
 - Usar Secret Manager o variables seguras de Cloud Run.
 - `DATABASE_URL` de Cloud Run debe apuntar a un usuario PostgreSQL/Supabase read-only.
@@ -47,6 +58,16 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 - `GET /db/health` con header `X-API-Key`
 - `GET /mini-report/json` con header `X-API-Key`
 - `GET /mini-report/markdown` con header `X-API-Key`
+- `GET /mini-report/extended/json` con header `X-API-Key`
+- `GET /mini-report/extended/markdown` con header `X-API-Key`
+
+Validaciones adicionales del reporte extendido:
+
+- `inflation_context.available=true` si `INFLACION_COPILOT_URL` esta configurada y el servicio responde.
+- Si inflacion no esta disponible, el endpoint debe responder con `inflation_context.available=false` y warning metodologico.
+- `line_family_analysis.available=true`.
+- `line_family_analysis.families` contiene tres familias: adquisicion vivienda nueva, adquisicion vivienda existente/usada y mejoramiento.
+- Cada familia contiene participacion en monto, participacion en creditos y deltas en puntos porcentuales.
 
 ## 5. Seguridad minima antes de exponer publicamente
 
@@ -74,9 +95,9 @@ Este documento prepara el despliegue futuro de la API FastAPI en Google Cloud Ru
 - Mantener endpoints de solo lectura.
 - No permitir que la IA ejecute SQL.
 
-## 7. Comandos futuros sugeridos - NO EJECUTAR TODAVIA
+## 7. Comandos para despliegue o actualizacion controlada
 
-Estos comandos son ejemplos para una fase posterior.
+Estos comandos son ejemplos. Ejecutarlos solo durante una ventana de despliegue definida, con repo limpio, pruebas pasando y variables/secretos revisados.
 
 ```powershell
 docker build -t infonavit-strategic-report-api .
@@ -97,8 +118,11 @@ gcloud run deploy infonavit-strategic-report-api `
   --platform managed `
   --min-instances 0 `
   --max-instances 1 `
-  --memory 512Mi
+  --memory 512Mi `
+  --set-env-vars ENVIRONMENT=production,INFLACION_COPILOT_URL=https://inflacion-copilot-api-490229283844.us-central1.run.app
 ```
+
+`DATABASE_URL` e `INFONAVIT_API_KEY` deben configurarse mediante Secret Manager o mecanismo seguro equivalente, no como texto plano en comandos compartidos.
 
 ## 8. Checklist final antes de deploy
 
@@ -108,6 +132,10 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `/db/health` local pasa con `X-API-Key`.
 - [ ] `/mini-report/json` local pasa con `X-API-Key`.
 - [ ] `/mini-report/markdown` local pasa con `X-API-Key`.
+- [ ] `/mini-report/extended/json` local pasa con `X-API-Key`.
+- [ ] `/mini-report/extended/markdown` local pasa con `X-API-Key`.
+- [ ] `inflation_context` validado con y sin `INFLACION_COPILOT_URL`.
+- [ ] `line_family_analysis` validado con tres familias y participaciones.
 - [ ] `.env` no versionado.
 - [ ] `DATABASE_URL` configurado como secreto.
 - [ ] `DATABASE_URL` usa usuario read-only para API.
@@ -122,3 +150,5 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] Usuario de base con permisos minimos definido.
 - [ ] `SELECT COUNT(*)` funciona con usuario read-only.
 - [ ] `INSERT`, `UPDATE` y `DELETE` fallan con usuario read-only.
+- [ ] `ENVIRONMENT=production` desactiva `/docs`, `/redoc` y `/openapi.json`.
+- [ ] Cloud Run responde con header `X-Request-ID`.

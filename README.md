@@ -422,7 +422,57 @@ Integracion opcional de inflacion:
 - Variable: `INFLACION_COPILOT_URL`.
 - Servicio esperado: `GET /inflation/average-period?current_year=YYYY&previous_year=YYYY&month_limit=N`.
 - Formula de crecimiento real: `(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100`.
+- El crecimiento real no se calcula como variacion nominal menos inflacion. Se calcula mediante deflactacion compuesta usando el factor de inflacion comparable.
+- `inflation_factor = promedio INPC periodo actual / promedio INPC periodo previo`.
+- Para 2026 vs 2025 con corte a mes 4, el factor se calcula con: promedio INPC enero-abril 2026 / promedio INPC enero-abril 2025.
+- Este criterio aplica porque el reporte compara agregados YTD, no observaciones puntuales.
 - Si el servicio no esta configurado o no responde, el reporte sigue funcionando y agrega warning metodologico.
+
+Para agregados anuales o YTD, el reporte usa inflacion promedio comparable, no inflacion punto a punto. La inflacion punto a punto sirve para equivalencias de poder adquisitivo entre dos fechas; la inflacion promedio comparable sirve para deflactar montos agregados de periodos.
+
+### Analisis por familia de linea
+
+El bloque `line_family_analysis` analiza solo tres familias funcionales:
+
+- Adquisicion de vivienda nueva.
+- Adquisicion de vivienda existente/usada.
+- Mejoramiento.
+
+Para cada familia calcula:
+
+- monto actual y previo;
+- creditos actuales y previos;
+- ticket promedio actual y previo;
+- variacion nominal de monto;
+- variacion real de monto si hay inflacion disponible;
+- variacion de creditos;
+- variacion nominal y real del ticket;
+- participacion en monto;
+- participacion en creditos;
+- cambio de participacion en puntos porcentuales.
+
+Campos principales del JSON:
+
+```text
+line_family_analysis.available
+line_family_analysis.families[].family
+line_family_analysis.families[].current
+line_family_analysis.families[].previous
+line_family_analysis.families[].variations.monto_nominal_pct
+line_family_analysis.families[].variations.monto_real_pct
+line_family_analysis.families[].variations.creditos_pct
+line_family_analysis.families[].variations.ticket_nominal_pct
+line_family_analysis.families[].variations.ticket_real_pct
+line_family_analysis.families[].variations.share_monto_actual_pct
+line_family_analysis.families[].variations.share_monto_previo_pct
+line_family_analysis.families[].variations.share_creditos_actual_pct
+line_family_analysis.families[].variations.share_creditos_previo_pct
+line_family_analysis.families[].variations.share_monto_delta_pp
+line_family_analysis.families[].variations.share_creditos_delta_pp
+line_family_analysis.families[].executive_reading
+```
+
+El analisis por familia permite identificar efecto mezcla. Por ejemplo, una familia puede ganar participacion en creditos y presionar a la baja el ticket promedio agregado si su ticket absoluto es menor al ticket promedio total, aun cuando su propio ticket crezca en terminos reales.
 
 Cruces futuros pendientes, no integrados todavia:
 
@@ -505,7 +555,7 @@ Para probar con Supabase localmente, usar variables de entorno sin imprimir cred
 docker run --rm -p 8080:8080 --env-file .env infonavit-strategic-report-api
 ```
 
-No se ha desplegado todavia en Google Cloud. Cloud Run queda como destino preferente futuro por escalado a cero y control de gasto. Las variables sensibles deben configurarse mediante Secret Manager o variables seguras de Cloud Run, nunca en Git.
+El despliegue en Cloud Run debe realizarse de forma controlada. La configuracion productiva requiere variables de entorno y secretos seguros. Las variables sensibles deben configurarse mediante Secret Manager o variables seguras de Cloud Run, nunca en Git.
 
 En Cloud Run configurar:
 
@@ -529,9 +579,9 @@ Antes de desplegar:
 
 Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md) para despliegue futuro.
 
-- Cloud Run sera el destino preferente futuro de la API.
+- Cloud Run es el destino preferente de la API.
 - La API sigue siendo solo lectura.
-- No se desplego todavia.
+- La URL publicada se documenta en la seccion de validacion Cloud Run.
 - Se documento checklist de despliegue con control de gasto.
 - Se reviso prevencion basica de SQL injection.
 - Se agregaron validaciones de parametros HTTP.
@@ -602,7 +652,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-78 passed
+La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local del bloque extendido se obtuvo `95 passed`.
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.

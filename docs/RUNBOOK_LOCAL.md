@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-78 passed
+95 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -250,6 +250,14 @@ print("ticket_promedio_actual=", report_json["summary"]["ticket_promedio_actual"
 print("inflation_available=", report_json["inflation_context"]["available"])
 print("inflation_pct=", report_json["inflation_context"].get("inflation_pct"))
 print("monto_variacion_real_pct=", report_json["inflation_context"].get("monto_variacion_real_pct"))
+print("line_family_analysis_available=", report_json["line_family_analysis"]["available"])
+for family in report_json["line_family_analysis"]["families"]:
+    variations = family["variations"]
+    print("family=", family["family"])
+    print("  share_monto_actual_pct=", variations["share_monto_actual_pct"])
+    print("  share_creditos_actual_pct=", variations["share_creditos_actual_pct"])
+    print("  share_monto_delta_pp=", variations["share_monto_delta_pp"])
+    print("  share_creditos_delta_pp=", variations["share_creditos_delta_pp"])
 '@ | python -
 ```
 
@@ -267,6 +275,8 @@ raw_shape= (10904, 7)
 creditos_actual > 0
 ticket_promedio_actual calculado
 inflation_available=True si `INFLACION_COPILOT_URL` esta configurada y disponible
+line_family_analysis_available=True
+families_count=3
 ```
 
 La formula de crecimiento real usada por el reporte extendido es:
@@ -274,6 +284,14 @@ La formula de crecimiento real usada por el reporte extendido es:
 ```text
 (((1 + nominal_pct / 100) / inflation_factor) - 1) * 100
 ```
+
+El bloque `line_family_analysis` incluye solo tres familias funcionales:
+
+- Adquisicion de vivienda nueva.
+- Adquisicion de vivienda existente/usada.
+- Mejoramiento.
+
+Cada familia reporta monto, creditos, ticket promedio, variaciones nominales/reales, participacion en monto, participacion en creditos y cambios de participacion en puntos porcentuales. La participacion se calcula contra el total general del reporte extendido, no contra el subtotal de las tres familias.
 
 ## 11. Retencion / higiene operativa
 

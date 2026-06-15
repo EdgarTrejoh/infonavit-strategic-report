@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `78 passed`.
+- Estado vigente de pruebas: `95 passed`.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -215,9 +215,9 @@ python main.py
 
 ### Lectura del estado
 
-- Vigente: pipeline local funcional, PostgreSQL/Supabase opcional y no bloqueante, ETL con zonas de trabajo, validacion de contrato, logging, manifests, retencion segura, mini reporte sin IA, API FastAPI solo lectura, Docker preparado para Cloud Run y operational readiness inicial aplicado.
+- Vigente: pipeline local funcional, PostgreSQL/Supabase opcional y no bloqueante, ETL con zonas de trabajo, validacion de contrato, logging, manifests, retencion segura, mini reporte sin IA, API FastAPI solo lectura, Docker preparado, Cloud Run publicado, operational readiness inicial aplicado y reporte extendido con inflacion comparable/familias de linea.
 - Historico: hallazgos iniciales de entorno, problemas de PATH, pruebas parciales y bloqueos de Unicode quedan documentados como contexto, no como bloqueos actuales.
-- Backlog posterior: refactors mayores, AppConfig, vistas SQL analiticas, IA, frontend, autenticacion formal y despliegue Cloud Run controlado.
+- Backlog posterior: refactors mayores, AppConfig, vistas SQL analiticas, IA, frontend, autenticacion formal y actualizaciones controladas de Cloud Run.
 
 ## 4. Etapas priorizadas
 
@@ -1242,6 +1242,9 @@ Se agregan `report_metrics_extended.py` y `mini_report_extended.py` para ampliar
 - Calcula monto, creditos, ticket promedio y variaciones YTD comparables.
 - Integra inflacion comparable de forma opcional mediante `INFLACION_COPILOT_URL`.
 - Calcula crecimiento real del monto colocado y del ticket promedio con formula compuesta: `(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100`.
+- Agrega `line_family_analysis` para tres familias: adquisicion de vivienda nueva, adquisicion de vivienda existente/usada y mejoramiento.
+- Calcula participacion por familia en monto y creditos contra el total general, mas cambios de participacion en puntos porcentuales.
+- Identifica efecto mezcla cuando una familia gana peso en creditos con ticket absoluto menor al ticket promedio agregado.
 - Incluye rankings por estado, linea y producto.
 - Genera narrativa deterministica, sin OpenAI.
 - Si el servicio de inflacion no esta configurado o no responde, el reporte sigue funcionando con `inflation_context.available=false` y warning metodologico.
@@ -1261,7 +1264,7 @@ Endpoints disponibles:
 - `GET /mini-report/extended/json`: genera mini reporte extendido JSON; requiere `X-API-Key`.
 - `GET /mini-report/extended/markdown`: genera mini reporte extendido Markdown; requiere `X-API-Key`.
 
-La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Cloud Run es el destino preferente de publicacion por escalado a cero y control de gasto; el servicio ya fue publicado y debe actualizarse de forma controlada.
 
 ## Preparacion para Cloud Run
 
@@ -1269,8 +1272,8 @@ Se agregan `Dockerfile` y `.dockerignore` para contenerizar la API FastAPI.
 
 - La API queda preparada para escuchar en `PORT`, compatible con Cloud Run.
 - El contenedor expone puerto `8080`.
-- No se desplego todavia en Google Cloud.
-- Cloud Run queda como destino preferente futuro por escalado a cero y control de gasto.
+- Cloud Run ya fue publicado y validado para la API.
+- Las actualizaciones de Cloud Run deben ejecutarse de forma controlada, con pruebas y secretos revisados.
 - Las variables sensibles deben ir por Secret Manager o variables seguras de Cloud Run, no en Git.
 
 Comandos locales previstos:
@@ -1281,23 +1284,23 @@ docker run --rm -p 8080:8080 infonavit-strategic-report-api
 curl http://127.0.0.1:8080/health
 ```
 
-Pendientes antes de desplegar:
+Pendientes antes de nuevas actualizaciones productivas:
 
 - configurar presupuesto y alertas en GCP;
-- definir autenticacion;
+- revisar autenticacion si se expone a usuarios externos;
 - definir limites de instancia;
-- configurar Secret Manager;
-- construir y desplegar imagen;
-- validar endpoint publico;
+- validar Secret Manager o variables seguras;
+- construir y desplegar nueva imagen solo en ventana controlada;
+- validar endpoint publico despues de cada revision;
 - monitorear costo y latencia.
 
 ## Preparacion Cloud Run y seguridad API
 
-Se agrego el checklist `docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md` para despliegue futuro.
+Se agrego el checklist `docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md` para despliegues y actualizaciones controladas.
 
-- Cloud Run sera el destino preferente futuro de la API.
+- Cloud Run es el destino preferente de la API.
 - La API sigue siendo solo lectura.
-- No se desplego todavia.
+- La URL publicada esta documentada en la validacion Cloud Run.
 - Se documento checklist de despliegue con control de gasto.
 - Se reviso prevencion basica de SQL injection.
 - Se agregaron validaciones de parametros HTTP.
@@ -1307,7 +1310,7 @@ Se agrego el checklist `docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md` para despliegue 
 Pendientes:
 
 - autenticacion formal si se expone a usuarios externos;
-- deploy real Docker/Cloud Run;
+- nuevas actualizaciones Docker/Cloud Run de forma controlada;
 - presupuesto y alertas GCP;
 - limites de instancia;
 - monitoreo de latencia/costo.
@@ -1327,6 +1330,7 @@ Pendientes:
 | Reporte extendido - creditos y ticket promedio | Si | Se corrige constante de la metrica real `Número de créditos formalizados`; la lectura extendida trae monto y creditos. Si falta una metrica en el periodo, se devuelve `null` y warning metodologico, no ceros silenciosos. Validacion read-only: 10,904 filas para 2025-2026, 5,452 por metrica. | Validar endpoint extendido en Cloud Run despues del siguiente despliegue. |
 
 | Reporte extendido - inflacion comparable | Si | Se agrega cliente `inflation_client.py` para consultar `inflacion-copilot-api`; si hay respuesta valida, el JSON agrega `inflation_context`, inflacion comparable, variacion nominal y variacion real de monto/ticket. Si falla o no esta configurado, el reporte continua con warning controlado. | Configurar `INFLACION_COPILOT_URL` en Cloud Run y validar endpoint extendido despues del siguiente despliegue. |
+| Reporte extendido - familias de linea y efecto mezcla | Si | `line_family_analysis` analiza tres familias funcionales: adquisicion de vivienda nueva, adquisicion de vivienda existente/usada y mejoramiento. Calcula monto, creditos, ticket, variaciones nominales/reales, participacion en monto/creditos y deltas en puntos porcentuales contra el total general. Detecta efecto mezcla cuando una familia gana peso en creditos con ticket menor al agregado. | Validar en Cloud Run tras nueva revision y monitorear que las etiquetas de linea sigan mapeando correctamente. |
 
 Prueba real de punta a punta:
 
@@ -1396,7 +1400,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Validacion Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA completada: 5,452 filas, rango 2025-01-01 a 2026-04-01, contrato `df_master` OK, JSON serializable OK, variacion YTD comparable 15.93%.
 - Migrador manual protegido: requiere `python migrate_csv_to_pg.py --run --yes`.
 - API FastAPI solo lectura implementada y validada localmente.
-- Dockerfile y `.dockerignore` creados para despliegue futuro en Cloud Run.
+- Dockerfile y `.dockerignore` creados para contenerizar la API y soportar despliegues/actualizaciones en Cloud Run.
 - Operational readiness inicial de API implementado: `X-Request-ID`, logging de duracion, validacion de parametros y SQL parametrizado.
 - Seguridad minima de API implementada: `/health` publico; `/db/health`, `/mini-report/json` y `/mini-report/markdown` protegidos con `X-API-Key` y `INFONAVIT_API_KEY`.
 - Documentacion FastAPI controlada por ambiente: Swagger/OpenAPI disponible en local; desactivada con `ENVIRONMENT=production`.
@@ -1404,6 +1408,8 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Minimo privilegio DB documentado: API read-only separada de credencial admin/migration del migrador; Cloud Run debe recibir solo la URL read-only.
 - Compatibilidad `data_access.py` ajustada para `pandas==3.0.3` y SQLAlchemy sin perder SQL parametrizado.
 - Mini reporte ejecutivo extendido implementado: monto, creditos, ticket promedio, rankings y narrativa deterministica sin IA.
+- Inflacion comparable integrada opcionalmente al reporte extendido mediante `INFLACION_COPILOT_URL`; si no esta disponible, el reporte continua con warning controlado.
+- Analisis por familias de linea implementado: adquisicion vivienda nueva, adquisicion vivienda existente/usada y mejoramiento, con participacion en monto/creditos y efecto mezcla.
 - Cloud Run publicado y validado: `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
 - Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
@@ -1416,7 +1422,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `78 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `95 passed`.
 
 ### Pendientes reales
 
@@ -1451,14 +1457,14 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Crear y validar usuario DB de solo lectura para la API en Supabase.
-2. Configurar `INFONAVIT_API_KEY`, `DATABASE_URL` y `ENVIRONMENT=production` como secretos o variables seguras antes de Cloud Run.
-3. Validar que GitHub Actions pase en `main`.
-4. Ejecutar una prueba Docker local final antes del deploy controlado.
+1. Validar que GitHub Actions pase en `main`.
+2. Preparar una nueva revision controlada de Cloud Run con los cambios de reporte extendido, `INFLACION_COPILOT_URL` y documentacion actualizada.
+3. Confirmar que Cloud Run mantiene `ENVIRONMENT=production`, `DATABASE_URL` read-only e `INFONAVIT_API_KEY` segura.
+4. Validar en Cloud Run `/mini-report/extended/json` y `/mini-report/extended/markdown` con `inflation_context` y `line_family_analysis`.
 
 ### Preparacion productiva
 
-5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx y costo.
+5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion.
 6. Mantener validacion local con:
 
 ```text
