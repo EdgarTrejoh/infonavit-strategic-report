@@ -107,11 +107,12 @@ def _fake_ai_insight():
         "available": True,
         "executive_thesis": "Tesis ejecutiva.",
         "key_findings": ["Hallazgo uno", "Hallazgo dos", "Hallazgo tres"],
+        "state_level_reading": "Lectura estatal descriptiva.",
         "mix_effect_reading": "Lectura de efecto mezcla.",
         "real_vs_nominal_reading": "Lectura real contra nominal.",
         "risks_or_caveats": ["Riesgo uno", "Riesgo dos"],
-        "recommended_next_crosses": ["indice SHF", "salario minimo", "IMSS derechohabientes"],
-        "committee_questions": ["Pregunta uno?", "Pregunta dos?", "Pregunta tres?"],
+        "recommended_next_crosses": ["Índice SHF de Precios de la Vivienda", "salario minimo", "IMSS derechohabientes"],
+        "analytical_questions": ["Pregunta uno?", "Pregunta dos?", "Pregunta tres?"],
         "linkedin_angle": "Angulo breve.",
         "confidence": "medium",
     }
@@ -384,7 +385,9 @@ def test_mini_report_ai_markdown_renders_expected_sections(monkeypatch):
     assert "Analisis asistido INFONAVIT" in response.text
     assert "Tesis ejecutiva" in response.text
     assert "Hallazgos clave" in response.text
-    assert "Preguntas para comite" in response.text
+    assert "Lectura estatal" in response.text
+    assert "Preguntas para siguiente analisis" in response.text
+    assert "Preguntas para comite" not in response.text
 
 
 def test_mini_report_extended_json_uses_inflation_context_when_available(monkeypatch):

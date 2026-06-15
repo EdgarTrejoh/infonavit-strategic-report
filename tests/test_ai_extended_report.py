@@ -34,13 +34,26 @@ def _extended_report():
             "ticket_variacion_real_pct": -15.84,
         },
         "line_family_analysis": {"available": True, "families": []},
-        "rankings": {},
-        "methodology": {"warnings": ["Comparacion YTD: no compara anios completos."]},
-        "future_crosses": {
-            "indice_shf": "pendiente",
-            "salario_minimo": "pendiente",
-            "imss_derechohabientes": "pendiente",
+        "rankings": {
+            "estados_por_monto": [{"nombre": "Nuevo Leon", "monto": 120.0, "ranking": 1}],
+            "estados_por_creditos": [{"nombre": "Jalisco", "creditos": 12.0, "ranking": 1}],
         },
+        "methodology": {"warnings": ["Comparacion YTD: no compara anios completos."]},
+        "future_crosses": [
+            {
+                "key": "indice_shf",
+                "label": "Índice SHF de Precios de la Vivienda",
+                "status": "pendiente",
+                "intended_use": "Contrastar contra precios de vivienda.",
+            },
+            {"key": "salario_minimo", "label": "Salario minimo", "status": "pendiente", "intended_use": ""},
+            {
+                "key": "imss_derechohabientes",
+                "label": "Derechohabientes IMSS",
+                "status": "pendiente",
+                "intended_use": "",
+            },
+        ],
     }
 
 
@@ -49,16 +62,21 @@ def _ai_payload(**overrides):
         "available": True,
         "executive_thesis": "La colocacion crece en terminos reales, aunque el ticket promedio retrocede.",
         "key_findings": ["Monto real positivo.", "Creditos al alza.", "Ticket real negativo."],
+        "state_level_reading": "Nuevo Leon lidera por monto y Jalisco lidera por creditos, sin inferir causalidad regional.",
         "mix_effect_reading": "El efecto mezcla sugiere mayor peso de productos con ticket menor.",
         "real_vs_nominal_reading": "La lectura real confirma crecimiento de monto menor al nominal.",
         "risks_or_caveats": ["Comparacion YTD.", "No hay SHF integrado."],
         "recommended_next_crosses": ["indice SHF", "salario minimo", "IMSS derechohabientes"],
-        "committee_questions": ["Que estados explican el cambio?", "Que producto presiona ticket?"],
+        "analytical_questions": ["Que estados explican el cambio?", "Que producto presiona ticket?"],
         "linkedin_angle": "El crecimiento real y el efecto mezcla cuentan una historia mas fina que el nominal.",
         "confidence": "medium",
     }
     payload.update(overrides)
     return payload
+
+
+def _mock_openai(monkeypatch, payload):
+    monkeypatch.setattr("ai_extended_report.httpx.post", lambda *args, **kwargs: _FakeResponse(json.dumps(payload)))
 
 
 def test_generate_ai_extended_insight_returns_fallback_without_api_key(monkeypatch):
@@ -76,9 +94,7 @@ def test_generate_ai_extended_insight_returns_structured_payload(monkeypatch):
 
     def fake_post(url, headers, json, timeout):
         calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
-        return _FakeResponse(json_module.dumps(_ai_payload()))
-
-    import json as json_module
+        return _FakeResponse(__import__("json").dumps(_ai_payload()))
 
     monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
 
@@ -86,6 +102,7 @@ def test_generate_ai_extended_insight_returns_structured_payload(monkeypatch):
 
     assert result["available"] is True
     assert result["confidence"] == "medium"
+    assert result["state_level_reading"]
     assert calls[0]["json"]["model"] == "gpt-4.1-mini"
     assert calls[0]["headers"]["Authorization"] == "Bearer test-key"
 
@@ -106,11 +123,7 @@ def test_generate_ai_extended_insight_uses_configured_model(monkeypatch):
 def test_generate_ai_extended_insight_limits_key_findings_to_five(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     findings = [f"Hallazgo {idx}" for idx in range(1, 8)]
-
-    def fake_post(*args, **kwargs):
-        return _FakeResponse(json.dumps(_ai_payload(key_findings=findings)))
-
-    monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
+    _mock_openai(monkeypatch, _ai_payload(key_findings=findings))
 
     result = generate_ai_extended_insight(_extended_report())
 
@@ -120,11 +133,7 @@ def test_generate_ai_extended_insight_limits_key_findings_to_five(monkeypatch):
 
 def test_generate_ai_extended_insight_invalid_confidence_defaults_to_medium(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-
-    def fake_post(*args, **kwargs):
-        return _FakeResponse(json.dumps(_ai_payload(confidence="very-high")))
-
-    monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
+    _mock_openai(monkeypatch, _ai_payload(confidence="very-high"))
 
     result = generate_ai_extended_insight(_extended_report())
 
@@ -132,15 +141,81 @@ def test_generate_ai_extended_insight_invalid_confidence_defaults_to_medium(monk
     assert result["confidence"] == "medium"
 
 
+def test_generate_ai_extended_insight_maps_legacy_committee_questions(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    payload = _ai_payload()
+    payload["committee_questions"] = ["Que estado lidera por monto?"]
+    del payload["analytical_questions"]
+    _mock_openai(monkeypatch, payload)
+
+    result = generate_ai_extended_insight(_extended_report())
+
+    assert result["available"] is True
+    assert result["analytical_questions"] == ["Que estado lidera por monto?"]
+    assert "committee_questions" not in result
+
+
 def test_generate_ai_extended_insight_missing_required_field_returns_fallback(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     payload = _ai_payload()
     del payload["executive_thesis"]
+    _mock_openai(monkeypatch, payload)
 
-    def fake_post(*args, **kwargs):
-        return _FakeResponse(json.dumps(payload))
+    assert generate_ai_extended_insight(_extended_report()) == {
+        "available": False,
+        "reason": "AI service unavailable",
+    }
 
-    monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
+
+def test_generate_ai_extended_insight_requires_state_reading_when_state_rankings_exist(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai(monkeypatch, _ai_payload(state_level_reading=""))
+
+    assert generate_ai_extended_insight(_extended_report()) == {
+        "available": False,
+        "reason": "AI service unavailable",
+    }
+
+
+def test_generate_ai_extended_insight_uses_full_future_cross_labels(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai(monkeypatch, _ai_payload(recommended_next_crosses=["indice SHF", "salario minimo"]))
+
+    result = generate_ai_extended_insight(_extended_report())
+
+    assert "Índice SHF de Precios de la Vivienda" in result["recommended_next_crosses"]
+    assert "indice SHF" not in result["recommended_next_crosses"]
+
+
+def test_generate_ai_extended_insight_filters_unsupported_terms(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai(
+        monkeypatch,
+        _ai_payload(
+            key_findings=[
+                "El monto real crece.",
+                "La demanda de creditos aumento.",
+                "El ticket promedio baja.",
+            ],
+            analytical_questions=[
+                "Que estado lidera por monto?",
+                "Como cambia el riesgo crediticio?",
+                "Que familia pesa mas en creditos?",
+            ],
+        ),
+    )
+
+    result = generate_ai_extended_insight(_extended_report())
+    joined = " ".join(result["key_findings"] + result["analytical_questions"]).lower()
+
+    assert result["available"] is True
+    assert "demanda" not in joined
+    assert "riesgo crediticio" not in joined
+
+
+def test_generate_ai_extended_insight_falls_back_when_text_field_has_unsupported_terms(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    _mock_openai(monkeypatch, _ai_payload(executive_thesis="La demanda explica el resultado."))
 
     assert generate_ai_extended_insight(_extended_report()) == {
         "available": False,
@@ -157,13 +232,13 @@ def test_ai_output_preserves_accents_in_json_and_markdown(monkeypatch):
             "La adquisición de vivienda existente ganó peso.",
             "¿Cuál es el siguiente cruce metodológico?",
         ],
-        committee_questions=["¿Cuál familia explica más el cambio?"],
+        analytical_questions=["¿Cuál familia explica más el cambio?"],
     )
 
-    def fake_post(*args, **kwargs):
-        return _FakeResponse(json.dumps(payload, ensure_ascii=False))
-
-    monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
+    monkeypatch.setattr(
+        "ai_extended_report.httpx.post",
+        lambda *args, **kwargs: _FakeResponse(json.dumps(payload, ensure_ascii=False)),
+    )
 
     result = generate_ai_extended_insight(_extended_report())
     response_payload = build_ai_response_payload(_extended_report(), result)
@@ -219,7 +294,9 @@ def test_ai_response_payload_and_markdown_render_expected_sections():
     assert "# Analisis asistido INFONAVIT" in markdown
     assert "## Tesis ejecutiva" in markdown
     assert "## Hallazgos clave" in markdown
-    assert "## Preguntas para comite" in markdown
+    assert "## Lectura estatal" in markdown
+    assert "## Preguntas para siguiente analisis" in markdown
+    assert "## Preguntas para comite" not in markdown
 
 
 def test_ai_markdown_renders_fallback_message():

@@ -33,6 +33,29 @@ LINE_FAMILIES = [
         "match_terms": ["mejoramiento", "mejoramientos", "mejoras", "l4 mejoras"],
     },
 ]
+FUTURE_CROSSES = [
+    {
+        "key": "indice_shf",
+        "label": "Índice SHF de Precios de la Vivienda",
+        "status": "pendiente",
+        "intended_use": (
+            "Contrastar monto colocado, ticket promedio y familias de credito contra la evolucion de precios "
+            "de la vivienda."
+        ),
+    },
+    {
+        "key": "salario_minimo",
+        "label": "Salario minimo",
+        "status": "pendiente",
+        "intended_use": "Evaluar la relacion entre ticket promedio, inflacion y poder adquisitivo.",
+    },
+    {
+        "key": "imss_derechohabientes",
+        "label": "Derechohabientes IMSS",
+        "status": "pendiente",
+        "intended_use": "Dimensionar la base potencial de acreditados y su relacion con creditos formalizados.",
+    },
+]
 
 
 def _json_safe(value: Any) -> Any:
@@ -481,14 +504,39 @@ def build_extended_context(
             "warnings": warnings,
         },
         "line_family_analysis": line_family_analysis,
-        "future_crosses": {
-            "inflacion_inpc": "pendiente",
-            "indice_shf": "pendiente",
-            "salario_minimo": "pendiente",
-            "imss_derechohabientes": "pendiente",
-        },
+        "future_crosses": [
+            {
+                "key": "inflacion_inpc",
+                "label": "INPC general",
+                "status": "pendiente",
+                "intended_use": "Deflactar variaciones nominales de monto colocado y ticket promedio.",
+            },
+            *FUTURE_CROSSES,
+        ],
     }
     return _json_safe(context)
+
+
+def _mark_future_cross_integrated(future_crosses: Any, key: str) -> Any:
+    if isinstance(future_crosses, list):
+        updated = []
+        found = False
+        for item in future_crosses:
+            if isinstance(item, dict) and item.get("key") == key:
+                new_item = dict(item)
+                new_item["status"] = "integrado"
+                updated.append(new_item)
+                found = True
+            else:
+                updated.append(item)
+        if not found:
+            updated.append({"key": key, "label": key, "status": "integrado", "intended_use": ""})
+        return updated
+    if isinstance(future_crosses, dict):
+        updated = dict(future_crosses)
+        updated[key] = "integrado"
+        return updated
+    return [{"key": key, "label": key, "status": "integrado", "intended_use": ""}]
 
 
 def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any] | None) -> dict[str, Any]:
@@ -539,5 +587,5 @@ def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any
             family.get("current", {}).get("ticket_promedio"),
             enriched.get("summary", {}).get("ticket_promedio_actual"),
         )
-    future_crosses["inflacion_inpc"] = "integrado"
+    enriched["future_crosses"] = _mark_future_cross_integrated(future_crosses, "inflacion_inpc")
     return _json_safe(enriched)

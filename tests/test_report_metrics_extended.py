@@ -175,7 +175,14 @@ def test_extended_report_json_serializes_and_markdown_contains_expected_terms():
     assert "ticket promedio" in markdown.lower()
     assert "YTD comparable" in markdown
     assert "Nota metodologica" in markdown or "Nota metodológica" in markdown
-    assert report_json["future_crosses"]["inflacion_inpc"] == "pendiente"
+    assert any(
+        item["key"] == "inflacion_inpc" and item["status"] == "pendiente"
+        for item in report_json["future_crosses"]
+    )
+    assert any(
+        item["key"] == "indice_shf" and item["label"] == "Índice SHF de Precios de la Vivienda"
+        for item in report_json["future_crosses"]
+    )
 
 
 def test_extended_markdown_explains_credit_growth_with_ticket_decline():
@@ -225,6 +232,10 @@ def test_add_inflation_context_calculates_real_variations_with_compound_formula(
     assert inflation["monto_variacion_real_pct"] == pytest.approx(expected_monto_real)
     assert inflation["ticket_variacion_nominal_pct"] == pytest.approx(40.0)
     assert inflation["ticket_variacion_real_pct"] == pytest.approx(expected_ticket_real)
+    assert any(
+        item["key"] == "inflacion_inpc" and item["status"] == "integrado"
+        for item in enriched["future_crosses"]
+    )
     json.dumps(enriched)
 
 

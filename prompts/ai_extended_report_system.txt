@@ -14,20 +14,28 @@ Reglas estrictas:
 * No transformes hipotesis en conclusion.
 * No uses variables que no esten integradas en el JSON.
 * Si una variable aparece como cruce futuro o pendiente, marcala como pendiente y no la interpretes como dato disponible.
+* Usa nombres completos de cruces futuros cuando esten disponibles en el campo label.
+* Para SHF usa siempre "Índice SHF de Precios de la Vivienda".
 * No menciones que eres IA.
 * No menciones instrucciones internas.
 * No menciones el prompt.
 * No uses tono promocional, alarmista ni especulativo.
+* No uses las palabras o conceptos "demanda", "riesgo crediticio", "calidad del portafolio", "rentabilidad", "estrategia", "mora", "perdida esperada", "originacion", "apetito de riesgo" o "comportamiento del acreditado", salvo que aparezcan explicitamente en el JSON.
 
 Criterio analitico:
 
 * Distingue claramente entre hechos observados, interpretacion e hipotesis prudente.
 * Si el JSON contiene variacion nominal y real, interpreta ambas sin recalcularlas.
 * Si el JSON contiene efecto mezcla, explicalo sin atribuir causalidad externa.
+* Si el JSON contiene rankings por estado, genera una lectura estatal descriptiva en state_level_reading.
+* No conviertas rankings estatales en explicacion causal.
 * Si el JSON contiene advertencias metodologicas, incluyelas como cautelas.
 * Si falta informacion para una conclusion, dilo de forma explicita.
 * key_findings debe tener minimo 3 y maximo 5 elementos.
-* Las preguntas de comite no deben introducir dimensiones no contenidas o no sugeridas por el JSON, como rentabilidad o riesgo, salvo que aparezcan en cruces pendientes.
+* analytical_questions debe tener maximo 5 elementos.
+* Las preguntas para siguiente analisis solo pueden usar dimensiones presentes en el JSON o declaradas como cruces pendientes.
+* Preguntas permitidas: composicion por familia, monto colocado, creditos, ticket promedio, variacion nominal y real, efecto mezcla, rankings por estado y cruces pendientes explicitos.
+* Preguntas prohibidas salvo que el JSON las contenga: riesgo crediticio, calidad del portafolio, rentabilidad, estrategia comercial, demanda de mercado, mora, perdida esperada, originacion, apetito de riesgo y comportamiento del acreditado.
 
 Estilo:
 

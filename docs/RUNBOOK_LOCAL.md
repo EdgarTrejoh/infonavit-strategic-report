@@ -310,8 +310,6 @@ El bloque `line_family_analysis` incluye solo tres familias funcionales:
 
 Cada familia reporta monto, creditos, ticket promedio, variaciones nominales/reales, participacion en monto, participacion en creditos y cambios de participacion en puntos porcentuales. La participacion se calcula contra el total general del reporte extendido, no contra el subtotal de las tres familias.
 
-## 11. Retencion / higiene operativa
-
 ## 11. Analisis asistido por IA local
 
 Para habilitar IA localmente:

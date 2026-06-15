@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -19,22 +21,37 @@ EXPECTED_KEYS = {
     "available",
     "executive_thesis",
     "key_findings",
+    "state_level_reading",
     "mix_effect_reading",
     "real_vs_nominal_reading",
     "risks_or_caveats",
     "recommended_next_crosses",
-    "committee_questions",
+    "analytical_questions",
     "linkedin_angle",
     "confidence",
 }
-LIST_FIELDS = ["key_findings", "risks_or_caveats", "recommended_next_crosses", "committee_questions"]
+LEGACY_KEYS = {"committee_questions"}
+LIST_FIELDS = ["key_findings", "risks_or_caveats", "recommended_next_crosses", "analytical_questions"]
 TEXT_FIELDS = [
     "executive_thesis",
+    "state_level_reading",
     "mix_effect_reading",
     "real_vs_nominal_reading",
     "linkedin_angle",
 ]
 VALID_CONFIDENCE = {"low", "medium", "high"}
+PROHIBITED_UNSUPPORTED_TERMS = [
+    "demanda",
+    "riesgo crediticio",
+    "calidad del portafolio",
+    "rentabilidad",
+    "estrategia",
+    "mora",
+    "perdida esperada",
+    "originacion",
+    "apetito de riesgo",
+    "comportamiento del acreditado",
+]
 SENSITIVE_MARKERS = {
     "OPENAI_API_KEY",
     "INFONAVIT_API_KEY",
@@ -74,8 +91,8 @@ def _build_user_prompt(extended_report: dict[str, Any]) -> str:
     return (
         "Interpreta el siguiente JSON extendido de INFONAVIT y devuelve unicamente JSON valido con esta estructura: "
         '{"available": true, "executive_thesis": "", "key_findings": [], '
-        '"mix_effect_reading": "", "real_vs_nominal_reading": "", "risks_or_caveats": [], '
-        '"recommended_next_crosses": [], "committee_questions": [], "linkedin_angle": "", '
+        '"state_level_reading": "", "mix_effect_reading": "", "real_vs_nominal_reading": "", '
+        '"risks_or_caveats": [], "recommended_next_crosses": [], "analytical_questions": [], "linkedin_angle": "", '
         '"confidence": "medium"}.\n\n'
         f"JSON extendido:\n{payload}"
     )
@@ -86,8 +103,73 @@ def _contains_sensitive_marker(text: str) -> bool:
     return any(marker.lower() in lower_text for marker in SENSITIVE_MARKERS)
 
 
-def _normalize_ai_output(payload: dict[str, Any]) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or not EXPECTED_KEYS.issubset(payload):
+def _normalize_for_match(value: Any) -> str:
+    text = "" if value is None else str(value)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(text.lower().split())
+
+
+def _contains_unsupported_terms(text: str, extended_report: dict[str, Any]) -> bool:
+    report_text = _normalize_for_match(json.dumps(_safe_subset(extended_report), ensure_ascii=False, default=str))
+    normalized_text = _normalize_for_match(text)
+    for term in PROHIBITED_UNSUPPORTED_TERMS:
+        normalized_term = _normalize_for_match(term)
+        if re.search(rf"\b{re.escape(normalized_term)}\b", normalized_text) and normalized_term not in report_text:
+            return True
+    return False
+
+
+def _future_cross_labels(extended_report: dict[str, Any]) -> list[str]:
+    future_crosses = extended_report.get("future_crosses", [])
+    if isinstance(future_crosses, list):
+        return [
+            str(item["label"])
+            for item in future_crosses
+            if isinstance(item, dict) and item.get("label") and item.get("status") != "integrado"
+        ]
+    if isinstance(future_crosses, dict):
+        labels = []
+        if "indice_shf" in future_crosses:
+            labels.append("Índice SHF de Precios de la Vivienda")
+        if "salario_minimo" in future_crosses:
+            labels.append("Salario minimo")
+        if "imss_derechohabientes" in future_crosses:
+            labels.append("Derechohabientes IMSS")
+        return labels
+    return []
+
+
+def _normalize_recommended_crosses(items: list[str], extended_report: dict[str, Any]) -> list[str]:
+    labels = _future_cross_labels(extended_report)
+    normalized_labels = {_normalize_for_match(label): label for label in labels}
+    normalized = []
+    for item in items:
+        text = str(item)
+        normalized_text = _normalize_for_match(text)
+        replacement = None
+        if "shf" in normalized_text:
+            replacement = next((label for key, label in normalized_labels.items() if "shf" in key), None)
+        elif "salario" in normalized_text:
+            replacement = next((label for key, label in normalized_labels.items() if "salario" in key), None)
+        elif "imss" in normalized_text or "derechohabientes" in normalized_text:
+            replacement = next((label for key, label in normalized_labels.items() if "imss" in key), None)
+        normalized.append(replacement or text)
+    return normalized
+
+
+def _has_state_rankings(extended_report: dict[str, Any]) -> bool:
+    rankings = extended_report.get("rankings", {})
+    return bool(rankings.get("estados_por_monto") or rankings.get("estados_por_creditos"))
+
+
+def _normalize_ai_output(payload: dict[str, Any], extended_report: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    if "analytical_questions" not in payload and "committee_questions" in payload:
+        payload = dict(payload)
+        payload["analytical_questions"] = payload.get("committee_questions")
+    if not EXPECTED_KEYS.issubset(payload):
         return None
     if payload.get("available") is not True:
         return None
@@ -95,13 +177,25 @@ def _normalize_ai_output(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
     if not all(isinstance(payload.get(field), list) for field in LIST_FIELDS):
         return None
+    if _has_state_rankings(extended_report) and not payload.get("state_level_reading", "").strip():
+        return None
 
     normalized = dict(payload)
     for field in LIST_FIELDS:
-        normalized[field] = [str(item) for item in normalized[field]]
+        normalized[field] = [
+            str(item) for item in normalized[field] if not _contains_unsupported_terms(str(item), extended_report)
+        ]
     normalized["key_findings"] = normalized["key_findings"][:5]
+    normalized["analytical_questions"] = normalized["analytical_questions"][:5]
+    normalized["recommended_next_crosses"] = _normalize_recommended_crosses(
+        normalized["recommended_next_crosses"], extended_report
+    )
+    for field in TEXT_FIELDS:
+        if _contains_unsupported_terms(normalized[field], extended_report):
+            return None
     if normalized.get("confidence") not in VALID_CONFIDENCE:
         normalized["confidence"] = "medium"
+    normalized.pop("committee_questions", None)
     return normalized
 
 
@@ -148,7 +242,7 @@ def generate_ai_extended_insight(extended_report: dict[str, Any]) -> dict[str, A
         logger.warning("AI insight generation failed error_type=%s", type(exc).__name__)
         return AI_UNAVAILABLE.copy()
 
-    normalized_payload = _normalize_ai_output(payload)
+    normalized_payload = _normalize_ai_output(payload, extended_report)
     if normalized_payload is None:
         logger.warning("AI insight generation returned invalid payload")
         return AI_UNAVAILABLE.copy()
@@ -192,6 +286,9 @@ def render_ai_insight_markdown(payload: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Lectura estatal",
+            insight.get("state_level_reading", ""),
+            "",
             "## Lectura real vs nominal",
             insight.get("real_vs_nominal_reading", ""),
             "",
@@ -202,8 +299,8 @@ def render_ai_insight_markdown(payload: dict[str, Any]) -> str:
         ]
     )
     lines.extend(f"- {item}" for item in insight.get("risks_or_caveats", []))
-    lines.extend(["", "## Preguntas para comite"])
-    lines.extend(f"- {item}" for item in insight.get("committee_questions", []))
+    lines.extend(["", "## Preguntas para siguiente analisis"])
+    lines.extend(f"- {item}" for item in insight.get("analytical_questions", []))
     lines.extend(["", "## Siguientes cruces recomendados"])
     lines.extend(f"- {item}" for item in insight.get("recommended_next_crosses", []))
     lines.extend(["", "## Angulo para comunicacion", insight.get("linkedin_angle", "")])
