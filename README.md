@@ -420,13 +420,15 @@ El reporte extendido calcula:
 Integracion opcional de inflacion:
 
 - Variable: `INFLACION_COPILOT_URL`.
+- Variable opcional de timeout: `INFLACION_COPILOT_TIMEOUT_SECONDS=20`.
 - Servicio esperado: `GET /inflation/average-period?current_year=YYYY&previous_year=YYYY&month_limit=N`.
 - Formula de crecimiento real: `(((1 + nominal_pct / 100) / inflation_factor) - 1) * 100`.
 - El crecimiento real no se calcula como variacion nominal menos inflacion. Se calcula mediante deflactacion compuesta usando el factor de inflacion comparable.
 - `inflation_factor = promedio INPC periodo actual / promedio INPC periodo previo`.
 - Para 2026 vs 2025 con corte a mes 4, el factor se calcula con: promedio INPC enero-abril 2026 / promedio INPC enero-abril 2025.
 - Este criterio aplica porque el reporte compara agregados YTD, no observaciones puntuales.
-- Si el servicio no esta configurado o no responde, el reporte sigue funcionando y agrega warning metodologico.
+- `INFLACION_COPILOT_TIMEOUT_SECONDS` controla el timeout de consulta al servicio de inflacion. Es util ante cold starts de Cloud Run. Si no existe, no es numerica o es menor o igual a cero, se usa `20`; el maximo permitido es `60`.
+- Si el servicio no esta configurado o no responde, el reporte sigue funcionando y agrega warning metodologico. El cliente reintenta una vez ante `ReadTimeout`.
 
 Para agregados anuales o YTD, el reporte usa inflacion promedio comparable, no inflacion punto a punto. La inflacion punto a punto sirve para equivalencias de poder adquisitivo entre dos fechas; la inflacion promedio comparable sirve para deflactar montos agregados de periodos.
 

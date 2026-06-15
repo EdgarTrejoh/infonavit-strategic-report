@@ -28,8 +28,9 @@ def _inflation_payload():
     }
 
 
-def test_fetch_average_period_inflation_builds_expected_request(monkeypatch):
+def test_fetch_average_period_inflation_builds_expected_request_with_default_timeout(monkeypatch):
     calls = []
+    monkeypatch.delenv("INFLACION_COPILOT_TIMEOUT_SECONDS", raising=False)
 
     def fake_get(url, params, timeout):
         calls.append({"url": url, "params": params, "timeout": timeout})
@@ -49,9 +50,69 @@ def test_fetch_average_period_inflation_builds_expected_request(monkeypatch):
         {
             "url": "https://inflacion.example.test/inflation/average-period",
             "params": {"current_year": 2026, "previous_year": 2025, "month_limit": 4},
-            "timeout": 8.0,
+            "timeout": 20.0,
         }
     ]
+
+
+def test_fetch_average_period_inflation_uses_valid_timeout_env(monkeypatch):
+    calls = []
+    monkeypatch.setenv("INFLACION_COPILOT_TIMEOUT_SECONDS", "12.5")
+
+    def fake_get(url, params, timeout):
+        calls.append(timeout)
+        return _FakeResponse(payload=_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert calls == [12.5]
+
+
+def test_fetch_average_period_inflation_caps_timeout_env(monkeypatch):
+    calls = []
+    monkeypatch.setenv("INFLACION_COPILOT_TIMEOUT_SECONDS", "120")
+
+    def fake_get(url, params, timeout):
+        calls.append(timeout)
+        return _FakeResponse(payload=_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert calls == [60.0]
+
+
+def test_fetch_average_period_inflation_uses_default_for_invalid_timeout_env(monkeypatch):
+    calls = []
+    monkeypatch.setenv("INFLACION_COPILOT_TIMEOUT_SECONDS", "not-a-number")
+
+    def fake_get(url, params, timeout):
+        calls.append(timeout)
+        return _FakeResponse(payload=_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert calls == [20.0]
+
+
+def test_fetch_average_period_inflation_uses_default_for_non_positive_timeout_env(monkeypatch):
+    calls = []
+    monkeypatch.setenv("INFLACION_COPILOT_TIMEOUT_SECONDS", "0")
+
+    def fake_get(url, params, timeout):
+        calls.append(timeout)
+        return _FakeResponse(payload=_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert calls == [20.0]
 
 
 def test_fetch_average_period_inflation_returns_none_without_base_url(monkeypatch):
@@ -61,15 +122,62 @@ def test_fetch_average_period_inflation_returns_none_without_base_url(monkeypatc
 
 
 def test_fetch_average_period_inflation_returns_none_on_http_error(monkeypatch):
-    monkeypatch.setattr("inflation_client.httpx.get", lambda *args, **kwargs: _FakeResponse(status_code=500))
+    calls = []
 
-    assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
-
-
-def test_fetch_average_period_inflation_returns_none_on_timeout(monkeypatch):
     def fake_get(*args, **kwargs):
-        raise httpx.TimeoutException("timeout")
+        calls.append(1)
+        return _FakeResponse(status_code=500)
 
     monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
+    assert len(calls) == 1
+
+
+def test_fetch_average_period_inflation_retries_once_after_read_timeout(monkeypatch):
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("timeout")
+        return _FakeResponse(payload=_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    payload = fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert payload["inflation_pct"] == 4.2133669155347775
+    assert len(calls) == 2
+
+
+def test_fetch_average_period_inflation_returns_none_after_two_read_timeouts(monkeypatch):
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append(1)
+        raise httpx.ReadTimeout("timeout")
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
+    assert len(calls) == 2
+
+
+def test_fetch_average_period_inflation_does_not_retry_other_http_errors(monkeypatch):
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append(1)
+        raise httpx.ConnectError("connect failed")
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
+    assert len(calls) == 1
+
+
+def test_fetch_average_period_inflation_returns_none_on_invalid_payload(monkeypatch):
+    monkeypatch.setattr("inflation_client.httpx.get", lambda *args, **kwargs: _FakeResponse(payload={"factor": 1.0}))
 
     assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None

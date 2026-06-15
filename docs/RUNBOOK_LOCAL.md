@@ -210,9 +210,12 @@ Para integrar inflacion comparable en local:
 
 ```powershell
 $env:INFLACION_COPILOT_URL="https://inflacion-copilot-api-490229283844.us-central1.run.app"
+$env:INFLACION_COPILOT_TIMEOUT_SECONDS="20"
 ```
 
-Si la variable no existe o el servicio no responde, el reporte extendido se genera de todos modos con `inflation_context.available=false` y warning metodologico.
+`INFLACION_COPILOT_TIMEOUT_SECONDS` es opcional. Controla el timeout de consulta al servicio de inflacion y ayuda ante cold starts de Cloud Run. Si no existe, no es numerica o es menor o igual a cero, se usa `20`; el maximo permitido es `60`.
+
+Si `INFLACION_COPILOT_URL` no existe o el servicio no responde, el reporte extendido se genera de todos modos con `inflation_context.available=false` y warning metodologico. El cliente reintenta una vez ante `ReadTimeout`.
 
 ```powershell
 @'

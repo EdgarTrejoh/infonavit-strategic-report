@@ -9,6 +9,21 @@ import httpx
 logger = logging.getLogger(__name__)
 
 INFLATION_SERVICE_UNAVAILABLE_REASON = "Inflation service not configured or unavailable"
+DEFAULT_TIMEOUT_SECONDS = 20.0
+MAX_TIMEOUT_SECONDS = 60.0
+
+
+def _get_timeout_seconds() -> float:
+    raw_value = os.getenv("INFLACION_COPILOT_TIMEOUT_SECONDS")
+    if raw_value is None:
+        return DEFAULT_TIMEOUT_SECONDS
+    try:
+        timeout = float(raw_value)
+    except ValueError:
+        return DEFAULT_TIMEOUT_SECONDS
+    if timeout <= 0:
+        return DEFAULT_TIMEOUT_SECONDS
+    return min(timeout, MAX_TIMEOUT_SECONDS)
 
 
 def _is_valid_inflation_payload(payload: dict[str, Any]) -> bool:
@@ -51,13 +66,28 @@ def fetch_average_period_inflation(
         "month_limit": int(month_limit),
     }
 
+    timeout = _get_timeout_seconds()
+    response = None
+    for attempt in (1, 2):
+        try:
+            response = httpx.get(url, params=params, timeout=timeout)
+            break
+        except httpx.ReadTimeout:
+            logger.warning("Inflation service timeout attempt=%s", attempt)
+            if attempt == 2:
+                return None
+        except httpx.HTTPError as exc:
+            logger.warning("Inflation service request failed error_type=%s", type(exc).__name__)
+            return None
+
     try:
-        response = httpx.get(url, params=params, timeout=8.0)
+        if response is None:
+            return None
         if response.status_code != 200:
             logger.warning("Inflation service unavailable status_code=%s", response.status_code)
             return None
         payload = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
+    except ValueError as exc:
         logger.warning("Inflation service request failed error_type=%s", type(exc).__name__)
         return None
 
