@@ -1,18 +1,34 @@
 from __future__ import annotations
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 import config
 
 METRICA_MONTO = "Monto de crédito Infonavit"
 METRICA_CREDITOS = "Número de créditos formalizados"
-METRICAS_EXTENDIDAS = [METRICA_MONTO, METRICA_CREDITOS]
+METRICA_MONTO_UTF8 = "Monto de crédito Infonavit"
+METRICA_CREDITOS_UTF8 = "Número de créditos formalizados"
+METRICA_MONTO_MOJIBAKE = "Monto de cr\u00c3\u00a9dito Infonavit"
+METRICA_CREDITOS_MOJIBAKE = "N\u00c3\u00bamero de cr\u00c3\u00a9ditos formalizados"
+METRICA_MONTO_ALIASES = [METRICA_MONTO, METRICA_MONTO_UTF8, METRICA_MONTO_MOJIBAKE]
+METRICA_CREDITOS_ALIASES = [METRICA_CREDITOS, METRICA_CREDITOS_UTF8, METRICA_CREDITOS_MOJIBAKE]
+METRICAS_EXTENDIDAS = [*METRICA_MONTO_ALIASES, *METRICA_CREDITOS_ALIASES]
 DF_MASTER_COLUMNS = ["fecha", "linea", "producto", "nombre_estado", "Monto"]
 
 
 def _estado_catalog() -> dict[int, str]:
     return {int(key): value for key, value in config.ESTADOS_MX.items()}
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    unique = []
+    seen = set()
+    for value in values:
+        if value not in seen:
+            unique.append(value)
+            seen.add(value)
+    return unique
 
 
 def build_df_master_from_long_table(df: pd.DataFrame) -> pd.DataFrame:
@@ -21,7 +37,8 @@ def build_df_master_from_long_table(df: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Faltan columnas requeridas en tabla larga: {sorted(missing)}")
 
-    data = df[df["metrica"] == METRICA_MONTO].copy()
+    data = df[df["metrica"].isin(METRICA_MONTO_ALIASES)].copy()
+    data["metrica"] = METRICA_MONTO
 
     data["anio"] = pd.to_numeric(data["anio"], errors="coerce")
     data["mes"] = pd.to_numeric(data["mes"], errors="coerce")
@@ -67,13 +84,13 @@ def load_df_master_from_db(engine, start_year: int | None = None, end_year: int 
         """
         SELECT anio, mes, estado, linea, producto, metrica, valor
         FROM infonavit_historico
-        WHERE metrica = :metrica_monto
+        WHERE metrica IN :metrica_monto_aliases
           AND (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
         """
-    )
+    ).bindparams(bindparam("metrica_monto_aliases", expanding=True))
     params = {
-        "metrica_monto": METRICA_MONTO,
+        "metrica_monto_aliases": METRICA_MONTO_ALIASES,
         "start_year": int(start_year) if start_year is not None else None,
         "end_year": int(end_year) if end_year is not None else None,
     }
@@ -88,17 +105,84 @@ def load_long_metrics_from_db(engine, start_year: int | None = None, end_year: i
         """
         SELECT anio, mes, estado, linea, producto, metrica, valor
         FROM infonavit_historico
-        WHERE metrica IN (:metrica_monto, :metrica_creditos)
+        WHERE metrica IN :metricas_extendidas
           AND (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
         """
-    )
+    ).bindparams(bindparam("metricas_extendidas", expanding=True))
     params = {
-        "metrica_monto": METRICA_MONTO,
-        "metrica_creditos": METRICA_CREDITOS,
+        "metricas_extendidas": METRICAS_EXTENDIDAS,
         "start_year": int(start_year) if start_year is not None else None,
         "end_year": int(end_year) if end_year is not None else None,
     }
     with engine.connect() as connection:
         result = connection.execute(query, params)
-        return pd.DataFrame(result.mappings().all(), columns=result.keys())
+        df = pd.DataFrame(result.mappings().all(), columns=result.keys())
+    if not df.empty:
+        metric_map = {alias: METRICA_MONTO for alias in METRICA_MONTO_ALIASES}
+        metric_map.update({alias: METRICA_CREDITOS for alias in METRICA_CREDITOS_ALIASES})
+        df["metrica"] = df["metrica"].map(metric_map).fillna(df["metrica"])
+    return df
+
+
+def get_db_metrics_diagnostics(engine, start_year: int | None = None, end_year: int | None = None) -> dict:
+    params = {
+        "start_year": int(start_year) if start_year is not None else None,
+        "end_year": int(end_year) if end_year is not None else None,
+    }
+    total_query = text(
+        """
+        SELECT COUNT(*) AS filas
+        FROM infonavit_historico
+        WHERE (:start_year IS NULL OR anio >= :start_year)
+          AND (:end_year IS NULL OR anio <= :end_year)
+        """
+    )
+    years_query = text(
+        """
+        SELECT anio, COUNT(*) AS filas
+        FROM infonavit_historico
+        WHERE (:start_year IS NULL OR anio >= :start_year)
+          AND (:end_year IS NULL OR anio <= :end_year)
+        GROUP BY anio
+        ORDER BY anio
+        """
+    )
+    metrics_query = text(
+        """
+        SELECT metrica, COUNT(*) AS filas, MIN(anio) AS min_anio, MAX(anio) AS max_anio
+        FROM infonavit_historico
+        WHERE (:start_year IS NULL OR anio >= :start_year)
+          AND (:end_year IS NULL OR anio <= :end_year)
+        GROUP BY metrica
+        ORDER BY metrica
+        """
+    )
+
+    with engine.connect() as connection:
+        total_rows = int(connection.execute(total_query, params).scalar() or 0)
+        years = [dict(row) for row in connection.execute(years_query, params).mappings().all()]
+        metrics = [dict(row) for row in connection.execute(metrics_query, params).mappings().all()]
+
+    metric_names = {item["metrica"] for item in metrics}
+    monto_aliases = _unique_strings(METRICA_MONTO_ALIASES)
+    creditos_aliases = _unique_strings(METRICA_CREDITOS_ALIASES)
+    return {
+        "table": "infonavit_historico",
+        "filters": {"start_year": start_year, "end_year": end_year},
+        "rows_total": total_rows,
+        "years": years,
+        "metrics": metrics,
+        "expected_metrics": [
+            {
+                "canonical": METRICA_MONTO,
+                "aliases": monto_aliases,
+                "present": any(alias in metric_names for alias in monto_aliases),
+            },
+            {
+                "canonical": METRICA_CREDITOS,
+                "aliases": creditos_aliases,
+                "present": any(alias in metric_names for alias in creditos_aliases),
+            },
+        ],
+    }

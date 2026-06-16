@@ -235,6 +235,57 @@ def test_db_health_returns_ok_with_api_key(monkeypatch):
     assert response.json() == {"status": "ok", "database": "available"}
 
 
+def test_db_metrics_diagnostics_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+
+    response = _client().get("/diagnostics/db-metrics")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_db_metrics_diagnostics_returns_counts_with_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+    monkeypatch.setattr(
+        api_main,
+        "get_db_metrics_diagnostics",
+        lambda engine, start_year=None, end_year=None: {
+            "table": "infonavit_historico",
+            "filters": {"start_year": start_year, "end_year": end_year},
+            "rows_total": 4,
+            "years": [{"anio": 2025, "filas": 2}, {"anio": 2026, "filas": 2}],
+            "metrics": [{"metrica": "Monto de credito Infonavit", "filas": 2}],
+            "expected_metrics": [{"canonical": "Monto de credito Infonavit", "present": True}],
+        },
+    )
+
+    response = _client().get(
+        "/diagnostics/db-metrics?start_year=2025&end_year=2026",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["table"] == "infonavit_historico"
+    assert payload["filters"] == {"start_year": 2025, "end_year": 2026}
+    assert payload["rows_total"] == 4
+    assert "DATABASE_URL" not in response.text
+    assert "password" not in response.text
+
+
+def test_db_metrics_diagnostics_rejects_invalid_year_range(monkeypatch):
+    _configure_api_key(monkeypatch)
+
+    response = _client().get(
+        "/diagnostics/db-metrics?start_year=2026&end_year=2025",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 422
+    _assert_no_sensitive_error_details(response.text)
+
+
 def test_protected_endpoint_fails_if_server_api_key_is_not_configured(monkeypatch):
     monkeypatch.delenv("INFONAVIT_API_KEY", raising=False)
 

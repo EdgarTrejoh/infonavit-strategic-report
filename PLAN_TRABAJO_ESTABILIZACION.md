@@ -199,10 +199,13 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `131 passed`.
+- Estado vigente de pruebas: `136 passed`.
 - Release GitHub creada: `v0.8`.
 - Prueba local con OpenAI validada y exitosa.
 - Publicacion en Cloud Run con OpenAI validada y exitosa.
+- Diagnostico DB protegido implementado en local: `/diagnostics/db-metrics`.
+- Validacion local posterior: 10,904 filas visibles para 2025-2026 y 5,452 filas por metrica de monto/creditos.
+- Pendiente operativo: desplegar nueva revision Cloud Run para incorporar diagnostico DB y lectura robusta de metricas UTF-8/mojibake.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1344,6 +1347,7 @@ Pendientes:
 | Documentacion FastAPI por ambiente | Si | `api/main.py` lee `ENVIRONMENT`; si `ENVIRONMENT=production`, desactiva `/docs`, `/redoc` y `/openapi.json`. En local/dev la documentacion FastAPI permanece disponible. | Confirmar `ENVIRONMENT=production` en Cloud Run despues del siguiente despliegue. |
 | Minimo privilegio DB API/migrador | Si | Se documenta separacion de credenciales: API con `DATABASE_URL` read-only, migrador con credencial admin/migration separada. Se agrega plantilla `docs/sql/create_api_readonly_user.sql` y validaciones sugeridas de `SELECT` permitido e `INSERT`/`UPDATE`/`DELETE` denegados. | Crear usuario real en Supabase, validar permisos y configurar solo la URL read-only en Cloud Run. Tabla `app_users` queda posterior a login/permisos/auditoria funcional. |
 | Compatibilidad pandas 3 / SQLAlchemy en `data_access.py` | Si | Dependabot actualizo pandas a `3.0.3`; `pd.read_sql_query()` con SQLAlchemy provoco `TypeError` en Cloud Run. Se reemplaza la lectura por `connection.execute(text(...), params)` y DataFrame desde mappings, manteniendo bind parameters y contrato `df_master`. | Validar `/mini-report/json` en Cloud Run con `DATABASE_URL` read-only despues del deploy/actualizacion. |
+| Diagnostico DB protegido | Si | Se agrega `/diagnostics/db-metrics`, protegido con `X-API-Key`, de solo lectura y sin filas de negocio. Devuelve conteos por anio, conteos por metrica y presencia de metricas esperadas para validar que Cloud Run/Supabase vean el mismo dataset que local. | Desplegar nueva revision Cloud Run y validar que el endpoint deje de responder `404`; despues validar que el reporte extendido productivo ya no devuelva ceros. |
 | Reporte extendido - creditos y ticket promedio | Si | Se corrige constante de la metrica real `Número de créditos formalizados`; la lectura extendida trae monto y creditos. Si falta una metrica en el periodo, se devuelve `null` y warning metodologico, no ceros silenciosos. Validacion read-only: 10,904 filas para 2025-2026, 5,452 por metrica. | Validar endpoint extendido en Cloud Run despues del siguiente despliegue. |
 
 | Reporte extendido - inflacion comparable | Si | Se agrega cliente `inflation_client.py` para consultar `inflacion-copilot-api`; si hay respuesta valida, el JSON agrega `inflation_context`, inflacion comparable, variacion nominal y variacion real de monto/ticket. Si falla o no esta configurado, el reporte continua con warning controlado. | Configurar `INFLACION_COPILOT_URL` en Cloud Run y validar endpoint extendido despues del siguiente despliegue. |
@@ -1431,7 +1435,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
 - Analisis asistido por IA implementado y validado en local y Cloud Run.
 - Release GitHub `v0.8` creada.
-- Estado vigente de pruebas de `v0.8`: `131 passed`.
+- Estado vigente de pruebas: `136 passed`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1442,7 +1446,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual de `v0.8`: `131 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual local: `136 passed`.
 
 ### Pendientes reales
 
@@ -1476,10 +1480,11 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Validar que GitHub Actions pase en `main` despues de la documentacion de `v0.8`.
-2. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
-3. Confirmar que Cloud Run mantiene `ENVIRONMENT=production`, `DATABASE_URL` read-only, `INFONAVIT_API_KEY` y `OPENAI_API_KEY` seguras.
-4. Documentar evidencia operativa de `/mini-report/ai/json` y `/mini-report/ai/markdown` en Cloud Run sin exponer secretos.
+1. Commit y push del bloque de diagnostico DB, lectura robusta de metricas y script `run_full_validation.ps1`.
+2. Desplegar nueva revision Cloud Run.
+3. Validar en Cloud Run `/diagnostics/db-metrics?start_year=2025&end_year=2026`; resultado esperado: 10,904 filas y metricas esperadas presentes.
+4. Validar en Cloud Run `/mini-report/extended/json` y `/mini-report/ai/json`; resultado esperado: `monto_actual > 0`, `creditos_actual > 0`, variaciones reales disponibles e IA con contexto no nulo.
+5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
 
 ### Preparacion productiva
 

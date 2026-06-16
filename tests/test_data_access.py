@@ -6,9 +6,12 @@ from sqlalchemy import create_engine, text
 
 from data_access import (
     DF_MASTER_COLUMNS,
+    METRICA_CREDITOS_ALIASES,
     METRICA_CREDITOS,
+    METRICA_MONTO_ALIASES,
     METRICA_MONTO,
     build_df_master_from_long_table,
+    get_db_metrics_diagnostics,
     load_df_master_from_db,
     load_long_metrics_from_db,
     validate_df_master_contract,
@@ -225,3 +228,117 @@ def test_load_long_metrics_from_db_reads_monto_and_creditos_with_year_filters():
     assert set(df["anio"]) == {2025}
     assert set(df["metrica"]) == {METRICA_MONTO, METRICA_CREDITOS}
     assert len(df) == 2
+
+
+def test_load_long_metrics_from_db_accepts_utf8_metric_aliases():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE infonavit_historico (
+                    anio INTEGER,
+                    mes INTEGER,
+                    estado INTEGER,
+                    linea TEXT,
+                    producto TEXT,
+                    metrica TEXT,
+                    valor REAL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO infonavit_historico
+                    (anio, mes, estado, linea, producto, metrica, valor)
+                VALUES
+                    (:anio, :mes, :estado, :linea, :producto, :metrica, :valor)
+                """
+            ),
+            [
+                {
+                    "anio": 2026,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_MONTO_ALIASES[-1],
+                    "valor": 100.0,
+                },
+                {
+                    "anio": 2026,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_CREDITOS_ALIASES[-1],
+                    "valor": 2.0,
+                },
+            ],
+        )
+
+    df = load_long_metrics_from_db(engine, start_year=2026, end_year=2026)
+
+    assert set(df["metrica"]) == {METRICA_MONTO, METRICA_CREDITOS}
+    assert len(df) == 2
+
+
+def test_get_db_metrics_diagnostics_returns_counts_without_row_data():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE infonavit_historico (
+                    anio INTEGER,
+                    mes INTEGER,
+                    estado INTEGER,
+                    linea TEXT,
+                    producto TEXT,
+                    metrica TEXT,
+                    valor REAL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO infonavit_historico
+                    (anio, mes, estado, linea, producto, metrica, valor)
+                VALUES
+                    (:anio, :mes, :estado, :linea, :producto, :metrica, :valor)
+                """
+            ),
+            [
+                {
+                    "anio": 2025,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_MONTO,
+                    "valor": 100.0,
+                },
+                {
+                    "anio": 2026,
+                    "mes": 1,
+                    "estado": 1,
+                    "linea": "L2 Nueva",
+                    "producto": "Producto A",
+                    "metrica": METRICA_CREDITOS,
+                    "valor": 2.0,
+                },
+            ],
+        )
+
+    diagnostics = get_db_metrics_diagnostics(engine, start_year=2025, end_year=2026)
+
+    assert diagnostics["table"] == "infonavit_historico"
+    assert diagnostics["rows_total"] == 2
+    assert {item["anio"] for item in diagnostics["years"]} == {2025, 2026}
+    assert {item["metrica"] for item in diagnostics["metrics"]} == {METRICA_MONTO, METRICA_CREDITOS}
+    assert all(item["present"] for item in diagnostics["expected_metrics"])
+    assert "source_file" not in json.dumps(diagnostics)

@@ -11,7 +11,12 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 from ai_extended_report import build_ai_response_payload, generate_ai_extended_insight, render_ai_insight_markdown
-from data_access import load_df_master_from_db, load_long_metrics_from_db, validate_df_master_contract
+from data_access import (
+    get_db_metrics_diagnostics,
+    load_df_master_from_db,
+    load_long_metrics_from_db,
+    validate_df_master_contract,
+)
 from database import engine, health_check
 from inflation_client import fetch_average_period_inflation
 from mini_report_extended import generate_extended_report
@@ -80,6 +85,27 @@ def database_health(_: None = Depends(require_api_key)):
         "database": "unavailable",
         "message": SAFE_DB_ERROR if message else SAFE_DB_ERROR,
     }
+
+
+@app.get("/diagnostics/db-metrics")
+def database_metrics_diagnostics(
+    _: None = Depends(require_api_key),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(
+        current_year=end_year or start_year or 2100,
+        previous_year=start_year or end_year or 2000,
+        start_year=start_year,
+        end_year=end_year,
+    )
+    if engine is None:
+        raise HTTPException(status_code=503, detail=SAFE_DB_ERROR)
+    try:
+        return get_db_metrics_diagnostics(engine, start_year=start_year, end_year=end_year)
+    except Exception as exc:
+        logger.warning("No se pudo generar diagnostico de metricas DB: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="No se pudo generar el diagnostico de metricas.") from exc
 
 
 def _validate_report_params(

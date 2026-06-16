@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-131 passed
+136 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -79,6 +79,14 @@ Si no hay credenciales o la base no responde, debe fallar de forma controlada:
 {"status":"error","database":"unavailable","message":"No se pudo conectar a PostgreSQL. Verifica host, puerto, base y credenciales."}
 ```
 
+### Diagnostico de metricas Supabase/PostgreSQL
+
+```powershell
+curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/diagnostics/db-metrics?start_year=2025&end_year=2026"
+```
+
+Este endpoint es de solo lectura y no devuelve filas de negocio. Sirve para validar que la API ve la tabla `infonavit_historico`, conteos por anio, conteos por metrica y presencia de las metricas esperadas.
+
 ### Mini reporte JSON
 
 ```powershell
@@ -119,13 +127,13 @@ Notas operativas:
 
 - La API FastAPI no lee directamente del CSV.
 - `/health` permanece publico.
-- `/db/health`, `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren header `X-API-Key`.
+- `/db/health`, `/diagnostics/db-metrics`, `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren header `X-API-Key`.
 - La variable `INFONAVIT_API_KEY` debe estar configurada en `.env`, PowerShell o variable segura del entorno.
 - La variable opcional `INFLACION_COPILOT_URL` permite agregar inflacion comparable y crecimiento real al reporte extendido.
 - `/mini-report/json`, `/mini-report/markdown` y endpoints extendidos requieren PostgreSQL/Supabase disponible.
 - La tabla `infonavit_historico` debe existir y estar poblada.
 - La API no ejecuta migraciones.
-- Antes de usar la API contra Supabase, validar `/db/health`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
+- Antes de usar la API contra Supabase, validar `/db/health`, `/diagnostics/db-metrics`, existencia de `infonavit_historico` y lectura mediante `data_access.py`.
 - La API debe usar `DATABASE_URL` con usuario read-only.
 - El migrador debe usar una credencial admin/migration separada.
 - Cloud Run debe recibir solo la credencial read-only; la credencial admin no debe configurarse en Cloud Run.
@@ -434,7 +442,75 @@ Para ejecutar una migracion real, usar confirmacion explicita:
 python migrate_csv_to_pg.py --run --yes --csv-path SII_concentrado_v3.csv
 ```
 
-## 15. Notas de seguridad
+## 15. Validacion completa local y Cloud Run
+
+El proyecto incluye un comando unico para ejecutar una validacion operativa y generar evidencia en Markdown y JSON:
+
+```powershell
+.\scripts\run_full_validation.ps1
+```
+
+Si PowerShell bloquea la ejecucion de scripts por politica local, usar:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_full_validation.ps1
+```
+
+El reporte se guarda en:
+
+```text
+outputs/validation/
+```
+
+La validacion incluye, segun variables disponibles:
+
+- `pytest`.
+- `database.health_check()` local.
+- health check read-only con `DATABASE_URL_READONLY`.
+- verificacion segura de CLI del migrador.
+- ejecucion de `main.py`.
+- API local con `uvicorn`.
+- endpoints locales sin IA y con IA.
+- endpoints Cloud Run sin IA y con IA.
+
+La migracion real no se ejecuta por defecto. Para ejecutarla manualmente dentro de esta validacion se debe confirmar de forma explicita:
+
+```powershell
+.\scripts\run_full_validation.ps1 -RunLocalMigration
+```
+
+Con bypass de politica local:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_full_validation.ps1 -RunLocalMigration
+```
+
+Parametros utiles:
+
+```powershell
+.\scripts\run_full_validation.ps1 -SkipMain
+.\scripts\run_full_validation.ps1 -SkipCloudRun
+.\scripts\run_full_validation.ps1 -SkipAI
+.\scripts\run_full_validation.ps1 -LocalApiPort 8010
+```
+
+Con bypass de politica local:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_full_validation.ps1 -SkipMain -SkipCloudRun
+```
+
+Requisitos para una validacion completa:
+
+- `.env` local con variables necesarias.
+- `INFONAVIT_API_KEY` para endpoints protegidos.
+- `DATABASE_URL` o `DATABASE_URL_READONLY` segun la prueba.
+- `OPENAI_API_KEY` si se desea validar endpoints locales con IA real.
+- `INFLACION_COPILOT_URL` si se desea validar inflacion comparable local.
+
+El script no imprime valores de `.env`, API keys ni connection strings. Si alguna variable no existe, la prueba relacionada se marca como `skipped` o falla de forma controlada.
+
+## 16. Notas de seguridad
 
 - No compartir `.env`.
 - No versionar `.env`.
