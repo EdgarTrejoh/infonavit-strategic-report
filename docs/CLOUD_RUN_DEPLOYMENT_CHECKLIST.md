@@ -11,6 +11,7 @@ Estado actual:
 - Documentacion FastAPI desactivada en produccion con `ENVIRONMENT=production`.
 - Supabase PostgreSQL es la fuente de datos inicial.
 - `inflacion-copilot-api` es dependencia opcional para inflacion comparable en el reporte extendido.
+- Capa OpenAI validada en local y Cloud Run para la release `v0.8`.
 
 ## 1. Pre-requisitos
 
@@ -41,6 +42,8 @@ Estado actual:
 
 - `DATABASE_URL` no debe ir en Git.
 - `INFONAVIT_API_KEY` no debe ir en Git.
+- `OPENAI_API_KEY` no debe ir en Git.
+- `OPENAI_MODEL` puede configurarse como variable segura; default local: `gpt-4.1-mini`.
 - `INFLACION_COPILOT_URL` no es secreto, pero debe configurarse como variable de entorno controlada si se desea inflacion comparable.
 - No usar `.env` en produccion.
 - Usar Secret Manager o variables seguras de Cloud Run.
@@ -49,6 +52,7 @@ Estado actual:
 - No imprimir `DATABASE_URL`.
 - No imprimir `DB_PASSWORD`.
 - No imprimir `INFONAVIT_API_KEY`.
+- No imprimir `OPENAI_API_KEY`.
 - No imprimir connection strings.
 - No pegar credenciales en README, Notion, issues, tickets ni logs.
 
@@ -60,6 +64,8 @@ Estado actual:
 - `GET /mini-report/markdown` con header `X-API-Key`
 - `GET /mini-report/extended/json` con header `X-API-Key`
 - `GET /mini-report/extended/markdown` con header `X-API-Key`
+- `GET /mini-report/ai/json` con header `X-API-Key`
+- `GET /mini-report/ai/markdown` con header `X-API-Key`
 
 Validaciones adicionales del reporte extendido:
 
@@ -68,6 +74,8 @@ Validaciones adicionales del reporte extendido:
 - `line_family_analysis.available=true`.
 - `line_family_analysis.families` contiene tres familias: adquisicion vivienda nueva, adquisicion vivienda existente/usada y mejoramiento.
 - Cada familia contiene participacion en monto, participacion en creditos y deltas en puntos porcentuales.
+- `ai_insight.available=true` cuando `OPENAI_API_KEY` esta configurada y el proveedor responde.
+- `recommended_next_crosses` solo contiene cruces pendientes declarados en `future_crosses`.
 
 ## 5. Seguridad minima antes de exponer publicamente
 
@@ -77,7 +85,7 @@ Validaciones adicionales del reporte extendido:
 - No habilitar endpoints de escritura.
 - No habilitar migraciones desde API.
 - No habilitar carga de archivos desde API.
-- No integrar IA antes de cerrar control de acceso.
+- La capa IA solo debe operar detras de `X-API-Key`; no calcula metricas, no ejecuta SQL y no modifica datos.
 
 ## 6. Seguridad SQL/API
 
@@ -122,7 +130,7 @@ gcloud run deploy infonavit-strategic-report-api `
   --set-env-vars ENVIRONMENT=production,INFLACION_COPILOT_URL=https://inflacion-copilot-api-490229283844.us-central1.run.app
 ```
 
-`DATABASE_URL` e `INFONAVIT_API_KEY` deben configurarse mediante Secret Manager o mecanismo seguro equivalente, no como texto plano en comandos compartidos.
+`DATABASE_URL`, `INFONAVIT_API_KEY` y `OPENAI_API_KEY` deben configurarse mediante Secret Manager o mecanismo seguro equivalente, no como texto plano en comandos compartidos.
 
 ## 8. Checklist final antes de deploy
 
@@ -134,6 +142,8 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `/mini-report/markdown` local pasa con `X-API-Key`.
 - [ ] `/mini-report/extended/json` local pasa con `X-API-Key`.
 - [ ] `/mini-report/extended/markdown` local pasa con `X-API-Key`.
+- [ ] `/mini-report/ai/json` local pasa con `X-API-Key` y `OPENAI_API_KEY`.
+- [ ] `/mini-report/ai/markdown` local pasa con `X-API-Key` y `OPENAI_API_KEY`.
 - [ ] `inflation_context` validado con y sin `INFLACION_COPILOT_URL`.
 - [ ] `line_family_analysis` validado con tres familias y participaciones.
 - [ ] `.env` no versionado.
@@ -141,6 +151,8 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `DATABASE_URL` usa usuario read-only para API.
 - [ ] Credencial admin/migration fuera de Cloud Run.
 - [ ] `INFONAVIT_API_KEY` configurado como secreto.
+- [ ] `OPENAI_API_KEY` configurado como secreto.
+- [ ] `OPENAI_MODEL` configurado o default aceptado.
 - [ ] Presupuesto GCP configurado.
 - [ ] Alertas GCP configuradas.
 - [ ] Limite de instancias definido.
@@ -152,3 +164,4 @@ gcloud run deploy infonavit-strategic-report-api `
 - [ ] `INSERT`, `UPDATE` y `DELETE` fallan con usuario read-only.
 - [ ] `ENVIRONMENT=production` desactiva `/docs`, `/redoc` y `/openapi.json`.
 - [ ] Cloud Run responde con header `X-Request-ID`.
+- [ ] Endpoints IA validados en Cloud Run sin exponer prompts, API keys ni datos crudos.

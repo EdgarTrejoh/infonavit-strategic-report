@@ -1,8 +1,8 @@
 # Reporte Ejecutivo INFONAVIT 2026
 
-Pipeline Python para consolidar informacion del Sistema de Informacion Infonavit (SII), generar datasets analiticos, producir visualizaciones ejecutivas, exportar un PDF y sincronizar opcionalmente el historico consolidado con PostgreSQL.
+Pipeline Python para consolidar informacion del Sistema de Informacion Infonavit (SII), generar datasets analiticos, producir visualizaciones ejecutivas, exportar un PDF, sincronizar opcionalmente el historico consolidado con PostgreSQL y exponer un mini reporte ejecutivo via API.
 
-El proyecto esta orientado a ejecucion operativa local y deja lista la base para despliegues posteriores en servicios como Cloud Run, Supabase u otra infraestructura administrada.
+El proyecto esta orientado a ejecucion operativa local y a una API de solo lectura publicada en Cloud Run, con Supabase PostgreSQL como primer destino productivo administrado.
 
 ## Estado Actual
 
@@ -15,6 +15,10 @@ El proyecto esta orientado a ejecucion operativa local y deja lista la base para
 - Manifest JSON por corrida ETL.
 - Suite minima de pruebas con pytest.
 - PDF ejecutivo generado correctamente para 2026.
+- API FastAPI publicada en Cloud Run y validada.
+- Reporte extendido con inflacion comparable, familias de linea, efecto mezcla y lectura asistida por IA.
+- Release GitHub actual: `v0.8`.
+- Estado vigente de pruebas: `131 passed`.
 
 ## Estructura
 
@@ -89,6 +93,11 @@ DB_PASSWORD=tu_password_aqui
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=infonavit
+INFONAVIT_API_KEY=change_me_local_only
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+INFLACION_COPILOT_URL=https://inflacion-copilot-api-490229283844.us-central1.run.app
+INFLACION_COPILOT_TIMEOUT_SECONDS=20
 ```
 
 Tambien puedes usar:
@@ -330,7 +339,7 @@ Flujo previsto:
 - `infonavit_historico`: tabla cruda sincronizada desde CSV.
 - `data_access.py`: transforma tabla larga a `df_master`.
 - `report_metrics.py`: calcula metricas ejecutivas reutilizables.
-- IA futura: consumira JSON estructurado, no la tabla cruda.
+- La capa IA consume JSON estructurado, no la tabla cruda.
 
 Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
 
@@ -361,7 +370,7 @@ Riesgos pendientes:
 
 ## Capa de metricas para mini reporte e IA
 
-El modulo `report_metrics.py` define funciones puras y testeables para preparar metricas reutilizables en un futuro mini reporte ejecutivo con insights asistidos por IA.
+El modulo `report_metrics.py` define funciones puras y testeables para preparar metricas reutilizables en el mini reporte ejecutivo y en la capa de interpretacion asistida por IA.
 
 Entrada esperada: `df_master` con columnas:
 
@@ -382,7 +391,7 @@ Salida disponible:
 
 Aclaraciones:
 
-- no integra OpenAI todavia;
+- no llama OpenAI directamente;
 - no genera PDF todavia;
 - no modifica visualizaciones actuales;
 - no depende de PostgreSQL;
@@ -395,9 +404,9 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 - Markdown ejecutivo;
 - JSON de mini reporte.
 
-Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
+Esta capa no integra OpenAI directamente, no genera PDF y no modifica visualizaciones actuales. Sirve para revisar texto estructurado y secciones del reporte antes o junto con la capa asistida por IA.
 
-## Mini reporte ejecutivo extendido sin IA
+## Mini reporte ejecutivo extendido
 
 Los modulos `report_metrics_extended.py` y `mini_report_extended.py` amplian el contexto analitico usando solo `infonavit_historico`.
 
@@ -478,9 +487,9 @@ El analisis por familia permite identificar efecto mezcla. Por ejemplo, una fami
 
 Cruces futuros pendientes, no integrados todavia:
 
-- indice SHF;
+- Indice SHF de Precios de la Vivienda;
 - salario minimo;
-- IMSS derechohabientes.
+- derechohabientes IMSS.
 
 Estos cruces no deben interpretarse como ya integrados hasta que existan datos, validacion y contrato especifico. La inflacion INPC solo debe interpretarse como integrada cuando `inflation_context.available=true`.
 
@@ -501,7 +510,7 @@ Endpoints disponibles:
 - `GET /mini-report/ai/json`: genera interpretacion ejecutiva asistida por IA sobre el JSON extendido; requiere `X-API-Key`.
 - `GET /mini-report/ai/markdown`: genera Markdown con interpretacion ejecutiva asistida por IA; requiere `X-API-Key`.
 
-La API integra una capa IA opcional para interpretar el JSON extendido; no genera PDF, no ejecuta migraciones y no modifica datos. Es una base futura para publicar en Cloud Run, que se mantiene como destino preferente para la API por escalado a cero y control de gasto.
+La API integra una capa IA opcional para interpretar el JSON extendido; no genera PDF, no ejecuta migraciones y no modifica datos. La API ya fue publicada y validada en Cloud Run.
 
 Los endpoints extendidos pueden consultar el servicio externo configurado en `INFLACION_COPILOT_URL` para agregar `inflation_context`, inflacion promedio comparable y crecimiento real. Si la variable no existe o el servicio falla, devuelven el reporte nominal con warning controlado, sin interrumpir la respuesta.
 
@@ -526,6 +535,8 @@ Reglas operativas:
 - No enviar credenciales, headers, API keys, connection strings ni variables de entorno.
 - No afirmar causalidad que no este sustentada por el JSON.
 - Si un cruce no esta integrado, debe mantenerse como cruce pendiente.
+- `recommended_next_crosses` solo debe incluir cruces pendientes declarados en `future_crosses`.
+- La prueba local y la publicacion Cloud Run con IA fueron validadas exitosamente para la version `v0.8`.
 
 Ejemplo local:
 
@@ -601,7 +612,7 @@ ENVIRONMENT=production
 
 Con esa variable se desactivan `/docs`, `/redoc` y `/openapi.json`. En local, si `ENVIRONMENT` no es `production`, la documentacion FastAPI permanece disponible para desarrollo.
 
-Antes de desplegar:
+Antes de nuevas actualizaciones productivas:
 
 - configurar presupuesto y alertas en GCP;
 - definir autenticacion;
@@ -613,7 +624,7 @@ Antes de desplegar:
 
 ## Preparacion Cloud Run y seguridad API
 
-Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md) para despliegue futuro.
+Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md) para despliegues y actualizaciones controladas.
 
 - Cloud Run es el destino preferente de la API.
 - La API sigue siendo solo lectura.
@@ -627,7 +638,6 @@ Se agrego el checklist [docs/CLOUD_RUN_DEPLOYMENT_CHECKLIST.md](docs/CLOUD_RUN_D
 Pendientes:
 
 - autenticacion formal si se expone a usuarios externos;
-- deploy real Docker/Cloud Run;
 - presupuesto y alertas GCP;
 - limites de instancia;
 - monitoreo de latencia/costo.
@@ -653,6 +663,15 @@ Validacion realizada el 2026-06-12:
 
 No se imprimio ni documento el valor real de `INFONAVIT_API_KEY`.
 
+Validacion actualizada de `v0.8`:
+
+- Prueba local con OpenAI: exitosa.
+- Publicacion Cloud Run con OpenAI: validada y exitosa.
+- Endpoints IA protegidos con `X-API-Key`:
+  - `/mini-report/ai/json`
+  - `/mini-report/ai/markdown`
+- `OPENAI_API_KEY` y `OPENAI_MODEL` deben configurarse como secretos o variables seguras, nunca en Git.
+
 ## Observabilidad y seguridad operativa de la API
 
 - La API genera un `request_id` por peticion y lo regresa en el header `X-Request-ID`.
@@ -662,7 +681,7 @@ No se imprimio ni documento el valor real de `INFONAVIT_API_KEY`.
 - Los parametros HTTP se validan antes de ejecutar consultas.
 - No se permite SQL libre desde la API.
 - No se registran credenciales, `DATABASE_URL`, `DB_PASSWORD` ni connection strings.
-- Cloud Run requiere configuracion posterior de Secret Manager, presupuesto, limites de instancia y control de acceso.
+- Cloud Run debe mantener secretos seguros, presupuesto/alertas, limites de instancia y control de acceso revisados en cada actualizacion.
 
 Ejecutar:
 
@@ -688,7 +707,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local del bloque extendido se obtuvo `95 passed`.
+La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local de `v0.8` se obtuvo `131 passed`.
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -702,7 +721,7 @@ El repositorio incluye `.github/workflows/ci.yml` para validar automaticamente:
 - `python -m pytest -q` con Python 3.11;
 - `docker build -t infonavit-strategic-report-api .`.
 
-El CI corre en `push` a `main` y en `pull_request` hacia `main`. No usa `.env`, no usa secrets, no se conecta a Supabase real, no ejecuta migraciones, no publica imagen Docker y no despliega Cloud Run. El deploy queda como fase manual/controlada posterior. La integracion de OpenAI API queda despues de Cloud Run protegido.
+El CI corre en `push` a `main` y en `pull_request` hacia `main`. No usa `.env`, no usa secrets, no se conecta a Supabase real, no ejecuta migraciones, no publica imagen Docker y no despliega Cloud Run. El deploy queda como fase manual/controlada posterior.
 
 ## Politica de Git
 
@@ -750,12 +769,13 @@ Motivo:
 - el proyecto ya soporta `DATABASE_URL`;
 - reduce complejidad operativa frente a Cloud SQL para una primera version;
 - es suficiente para el primer mini reporte interpretativo;
-- permite centralizar datos para una futura capa IA.
+- permite centralizar datos para la capa IA.
 
 Criterio para IA:
 
-- la IA no consumira datos crudos directamente;
-- la IA consumira JSON estructurado generado por `report_metrics.py` o vistas/tablas analiticas.
+- la IA no consume datos crudos directamente;
+- la IA consume JSON estructurado generado por `report_metrics_extended.py` y `mini_report_extended.py`;
+- la IA no calcula metricas, no ejecuta SQL y no modifica datos.
 
 Estado validado en Supabase:
 
@@ -767,13 +787,15 @@ Estado validado en Supabase:
   - `grupos_duplicados`: 0
 - El migrador manual esta protegido: requiere `--run --yes` para ejecutar cambios.
 
-Antes de productivo, pendientes recomendados:
+Pendientes recomendados posteriores a `v0.8`:
 
 - definir vistas/tablas analiticas para mini reporte;
 - ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
-- prueba opcional de integracion PostgreSQL;
 - automatizacion/operacion productiva de la politica de retencion;
-- README de `datos_entrada/` con convencion de nombres de archivos.
+- monitoreo de latencia/costo Cloud Run;
+- presupuesto y alertas GCP;
+- politica de backups/restore Supabase;
+- autenticacion formal si la API se expone a usuarios externos.
 
 ## Autor y Fuente
 

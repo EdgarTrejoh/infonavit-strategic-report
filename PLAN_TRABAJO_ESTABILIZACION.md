@@ -199,7 +199,10 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `95 passed`.
+- Estado vigente de pruebas: `131 passed`.
+- Release GitHub creada: `v0.8`.
+- Prueba local con OpenAI validada y exitosa.
+- Publicacion en Cloud Run con OpenAI validada y exitosa.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -215,9 +218,9 @@ python main.py
 
 ### Lectura del estado
 
-- Vigente: pipeline local funcional, PostgreSQL/Supabase opcional y no bloqueante, ETL con zonas de trabajo, validacion de contrato, logging, manifests, retencion segura, mini reporte sin IA, API FastAPI solo lectura, Docker preparado, Cloud Run publicado, operational readiness inicial aplicado y reporte extendido con inflacion comparable/familias de linea.
+- Vigente: pipeline local funcional, PostgreSQL/Supabase opcional y no bloqueante, ETL con zonas de trabajo, validacion de contrato, logging, manifests, retencion segura, API FastAPI solo lectura, Docker preparado, Cloud Run publicado, operational readiness inicial aplicado, reporte extendido con inflacion comparable/familias de linea y analisis asistido por IA validado en local y Cloud Run.
 - Historico: hallazgos iniciales de entorno, problemas de PATH, pruebas parciales y bloqueos de Unicode quedan documentados como contexto, no como bloqueos actuales.
-- Backlog posterior: refactors mayores, AppConfig, vistas SQL analiticas, IA, frontend, autenticacion formal y actualizaciones controladas de Cloud Run.
+- Backlog posterior: refactors mayores, AppConfig, vistas SQL analiticas, frontend, autenticacion formal, monitoreo productivo y actualizaciones controladas de Cloud Run.
 
 ## 4. Etapas priorizadas
 
@@ -380,7 +383,7 @@ database:
 - Con `database.enabled: true` y `database.fail_on_error: false`, una falla de PostgreSQL queda registrada y el PDF se genera.
 - Con `database.enabled: true` y `database.fail_on_error: true`, una falla de PostgreSQL detiene el proceso.
 - El health check informa disponibilidad de DB sin mostrar contrasena.
-- La configuracion es compatible con ejecucion local y con despliegue futuro en Supabase, Cloud SQL o Google Cloud Run.
+- La configuracion es compatible con ejecucion local y con despliegues/actualizaciones en Supabase, Cloud SQL o Google Cloud Run.
 
 **Riesgos**
 
@@ -1176,7 +1179,7 @@ Flujo previsto:
 - `infonavit_historico`: tabla cruda sincronizada desde CSV.
 - `data_access.py`: transforma tabla larga a `df_master`.
 - `report_metrics.py`: calcula metricas ejecutivas reutilizables.
-- IA futura: consumira JSON estructurado, no la tabla cruda.
+- La capa IA consume JSON estructurado, no la tabla cruda.
 
 Las vistas SQL quedan como fase posterior, una vez validado el contrato del mini reporte.
 
@@ -1219,7 +1222,7 @@ Salida disponible:
 
 Aclaraciones:
 
-- no integra OpenAI todavia;
+- no llama OpenAI directamente;
 - no genera PDF todavia;
 - no modifica visualizaciones actuales;
 - no depende de PostgreSQL;
@@ -1232,9 +1235,9 @@ El modulo `mini_report.py` toma el JSON estructurado de `report_metrics.py` y ge
 - Markdown ejecutivo;
 - JSON de mini reporte.
 
-Esta capa no integra OpenAI todavia, no genera PDF y no modifica visualizaciones actuales. Sirve como paso previo para revisar texto estructurado y secciones del reporte antes de automatizar insights con IA.
+Esta capa no integra OpenAI directamente, no genera PDF y no modifica visualizaciones actuales. Sirve para revisar texto estructurado y secciones del reporte antes o junto con la capa asistida por IA.
 
-## Mini reporte ejecutivo extendido sin IA
+## Mini reporte ejecutivo extendido
 
 Se agregan `report_metrics_extended.py` y `mini_report_extended.py` para ampliar el contexto analitico usando solo `infonavit_historico`.
 
@@ -1248,7 +1251,7 @@ Se agregan `report_metrics_extended.py` y `mini_report_extended.py` para ampliar
 - Incluye rankings por estado, linea y producto.
 - Genera narrativa deterministica, sin OpenAI.
 - Si el servicio de inflacion no esta configurado o no responde, el reporte sigue funcionando con `inflation_context.available=false` y warning metodologico.
-- Deja como cruces futuros pendientes indice SHF, salario minimo e IMSS derechohabientes.
+- Deja como cruces futuros pendientes Indice SHF de Precios de la Vivienda, salario minimo y derechohabientes IMSS.
 - No afirma esos cruces como integrados todavia.
 
 ## API minima FastAPI
@@ -1263,8 +1266,22 @@ Endpoints disponibles:
 - `GET /mini-report/markdown`: genera mini reporte Markdown como texto plano; requiere `X-API-Key`.
 - `GET /mini-report/extended/json`: genera mini reporte extendido JSON; requiere `X-API-Key`.
 - `GET /mini-report/extended/markdown`: genera mini reporte extendido Markdown; requiere `X-API-Key`.
+- `GET /mini-report/ai/json`: genera analisis asistido por IA sobre el JSON extendido; requiere `X-API-Key`.
+- `GET /mini-report/ai/markdown`: genera Markdown con analisis asistido por IA; requiere `X-API-Key`.
 
-La API no integra OpenAI todavia, no genera PDF, no ejecuta migraciones y no modifica datos. Cloud Run es el destino preferente de publicacion por escalado a cero y control de gasto; el servicio ya fue publicado y debe actualizarse de forma controlada.
+La API integra OpenAI de forma opcional para interpretar el JSON extendido; no genera PDF, no ejecuta migraciones y no modifica datos. Cloud Run es el destino preferente de publicacion por escalado a cero y control de gasto; el servicio ya fue publicado y debe actualizarse de forma controlada.
+
+## Analisis asistido por IA - v0.8
+
+- `ai_extended_report.py` consume el JSON extendido ya calculado.
+- La IA no calcula metricas, no consulta base de datos, no ejecuta SQL y no modifica datos.
+- `OPENAI_API_KEY` habilita la capa IA; `OPENAI_MODEL` permite configurar modelo.
+- `recommended_next_crosses` queda restringido a cruces pendientes declarados en `future_crosses`.
+- La salida incluye lectura estatal cuando existen rankings por estado.
+- Se bloquean o limpian conceptos no sustentados por el JSON, por ejemplo riesgo crediticio, calidad del portafolio, demanda o estrategia.
+- Prueba local con OpenAI: validada y exitosa.
+- Publicacion en Cloud Run con OpenAI: validada y exitosa.
+- Release GitHub asociada: `v0.8`.
 
 ## Preparacion para Cloud Run
 
@@ -1394,7 +1411,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Destino productivo inicial de datos definido: Supabase PostgreSQL.
 - Desarrollo local definido: PostgreSQL local.
 - Futuro enterprise/GCP definido: Cloud SQL o BigQuery.
-- La IA no consumira datos crudos directamente; consumira JSON estructurado de `report_metrics.py` o vistas/tablas analiticas.
+- La IA no consume datos crudos directamente; consume JSON estructurado del reporte extendido y no calcula metricas ni ejecuta SQL.
 - Supabase validado: `health_check` exitoso, tabla `infonavit_historico` disponible y conteos correctos.
 - Conteos Supabase validados: `filas_totales=109430`, `ids_unicos=109430`, `grupos_duplicados=0`.
 - Validacion Supabase -> `data_access.py` -> `report_metrics.py` -> JSON IA completada: 5,452 filas, rango 2025-01-01 a 2026-04-01, contrato `df_master` OK, JSON serializable OK, variacion YTD comparable 15.93%.
@@ -1412,6 +1429,9 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Analisis por familias de linea implementado: adquisicion vivienda nueva, adquisicion vivienda existente/usada y mejoramiento, con participacion en monto/creditos y efecto mezcla.
 - Cloud Run publicado y validado: `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
 - Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
+- Analisis asistido por IA implementado y validado en local y Cloud Run.
+- Release GitHub `v0.8` creada.
+- Estado vigente de pruebas de `v0.8`: `131 passed`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1422,7 +1442,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual: `95 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual de `v0.8`: `131 passed`.
 
 ### Pendientes reales
 
@@ -1437,7 +1457,6 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura.
 - Agregar prueba opcional de integracion PostgreSQL.
 - Crear/validar usuario real de base de datos de solo lectura para la API en Supabase.
-- Configurar Secret Manager o variables seguras en Cloud Run.
 - Configurar presupuesto y alertas GCP antes del despliegue.
 - Definir politica de backups Supabase y prueba de restore.
 - Mantener vistas SQL como fase posterior.
@@ -1457,14 +1476,14 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Validar que GitHub Actions pase en `main`.
-2. Preparar una nueva revision controlada de Cloud Run con los cambios de reporte extendido, `INFLACION_COPILOT_URL` y documentacion actualizada.
-3. Confirmar que Cloud Run mantiene `ENVIRONMENT=production`, `DATABASE_URL` read-only e `INFONAVIT_API_KEY` segura.
-4. Validar en Cloud Run `/mini-report/extended/json` y `/mini-report/extended/markdown` con `inflation_context` y `line_family_analysis`.
+1. Validar que GitHub Actions pase en `main` despues de la documentacion de `v0.8`.
+2. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
+3. Confirmar que Cloud Run mantiene `ENVIRONMENT=production`, `DATABASE_URL` read-only, `INFONAVIT_API_KEY` y `OPENAI_API_KEY` seguras.
+4. Documentar evidencia operativa de `/mini-report/ai/json` y `/mini-report/ai/markdown` en Cloud Run sin exponer secretos.
 
 ### Preparacion productiva
 
-5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion.
+5. Configurar o confirmar presupuesto y alertas GCP.
 6. Mantener validacion local con:
 
 ```text
@@ -1478,4 +1497,5 @@ python -m pytest -q
 8. Evaluar prueba opcional de integracion PostgreSQL.
 9. Evaluar runner/CLI/frontend operativo para usuarios no tecnicos.
 10. Evaluar politica de almacenamiento externo para PDFs y PNGs generados.
-11. Integrar OpenAI API solo despues de Cloud Run protegido, API estable y contrato de datos validado.
+11. Definir autenticacion formal o control por clientes si se expone la API a usuarios externos.
+12. Evaluar cache de respuestas del reporte extendido/IA si la latencia o costo crecen.

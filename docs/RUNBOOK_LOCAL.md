@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-95 passed
+131 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -312,6 +312,12 @@ Cada familia reporta monto, creditos, ticket promedio, variaciones nominales/rea
 
 ## 11. Analisis asistido por IA local
 
+Estado validado para `v0.8`:
+
+- Prueba local con OpenAI: exitosa.
+- Publicacion Cloud Run con OpenAI: validada y exitosa.
+- Los endpoints IA siguen protegidos con `X-API-Key`.
+
 Para habilitar IA localmente:
 
 ```powershell
@@ -336,6 +342,13 @@ Invoke-RestMethod `
 ```
 
 No registrar prompts completos, `OPENAI_API_KEY`, `INFONAVIT_API_KEY`, `DATABASE_URL` ni connection strings.
+
+Validar que la respuesta de IA mantenga estas reglas:
+
+- `recommended_next_crosses` solo incluye cruces pendientes de `future_crosses`.
+- No usa variables ya integradas como monto colocado, creditos, ticket promedio, composicion por familia, rankings por estado o inflacion integrada.
+- Incluye lectura estatal cuando hay rankings por estado.
+- No usa dimensiones no contenidas en el JSON, como riesgo crediticio, calidad del portafolio, demanda o estrategia.
 
 ## 12. Retencion / higiene operativa
 
