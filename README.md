@@ -20,6 +20,7 @@ El proyecto esta orientado a ejecucion operativa local y a una API de solo lectu
 - Release GitHub actual: `v0.8`.
 - Estado vigente de pruebas: `136 passed`.
 - Diagnostico protegido de metricas DB disponible en local: `/diagnostics/db-metrics`.
+- En PostgreSQL, la API consulta explicitamente `public.infonavit_historico` para evitar diferencias por `search_path`.
 - Pendiente operativo inmediato: desplegar nueva revision Cloud Run con diagnostico DB y lectura robusta de metricas UTF-8/mojibake.
 
 ## Estructura
@@ -683,7 +684,7 @@ Validacion actualizada de `v0.8`:
 - La API registra metodo HTTP, path, status code, duracion de la peticion y `request_id`.
 - Los endpoints de mini reporte registran duraciones internas aproximadas: carga desde DB, calculo de metricas, render de mini reporte y total.
 - Los endpoints de mini reporte siguen siendo de solo lectura.
-- `/diagnostics/db-metrics` es un endpoint protegido de solo lectura para diagnosticar conteos por anio/metrica sin exponer filas de negocio ni secretos.
+- `/diagnostics/db-metrics` es un endpoint protegido de solo lectura para diagnosticar metadatos seguros de conexion, conteos por anio/metrica y presencia de metricas esperadas sin exponer filas de negocio ni secretos.
 - Los parametros HTTP se validan antes de ejecutar consultas.
 - No se permite SQL libre desde la API.
 - No se registran credenciales, `DATABASE_URL`, `DB_PASSWORD` ni connection strings.

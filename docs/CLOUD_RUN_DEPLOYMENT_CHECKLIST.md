@@ -70,7 +70,7 @@ Estado actual:
 
 Validaciones adicionales del reporte extendido:
 
-- `/diagnostics/db-metrics` debe confirmar filas visibles en `infonavit_historico`, conteos por anio y presencia de metricas esperadas.
+- `/diagnostics/db-metrics` debe confirmar metadatos seguros de conexion, filas visibles en `public.infonavit_historico`, conteos por anio y presencia de metricas esperadas.
 - Para 2025-2026, referencia local validada: 10,904 filas totales y 5,452 filas por metrica monto/creditos.
 - `/mini-report/extended/json` debe devolver `monto_actual > 0` y `creditos_actual > 0`; si devuelve ceros/null, revisar `DATABASE_URL`, usuario read-only o nombres de metrica.
 - `inflation_context.available=true` si `INFLACION_COPILOT_URL` esta configurada y el servicio responde.

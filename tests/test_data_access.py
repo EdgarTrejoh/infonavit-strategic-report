@@ -337,6 +337,12 @@ def test_get_db_metrics_diagnostics_returns_counts_without_row_data():
     diagnostics = get_db_metrics_diagnostics(engine, start_year=2025, end_year=2026)
 
     assert diagnostics["table"] == "infonavit_historico"
+    assert diagnostics["connection"] == {
+        "dialect": "sqlite",
+        "database": None,
+        "schema": None,
+        "user": None,
+    }
     assert diagnostics["rows_total"] == 2
     assert {item["anio"] for item in diagnostics["years"]} == {2025, 2026}
     assert {item["metrica"] for item in diagnostics["metrics"]} == {METRICA_MONTO, METRICA_CREDITOS}

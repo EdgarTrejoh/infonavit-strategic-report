@@ -85,7 +85,7 @@ Si no hay credenciales o la base no responde, debe fallar de forma controlada:
 curl -H "X-API-Key: change_me_local_only" "http://127.0.0.1:8080/diagnostics/db-metrics?start_year=2025&end_year=2026"
 ```
 
-Este endpoint es de solo lectura y no devuelve filas de negocio. Sirve para validar que la API ve la tabla `infonavit_historico`, conteos por anio, conteos por metrica y presencia de las metricas esperadas.
+Este endpoint es de solo lectura y no devuelve filas de negocio. Sirve para validar que la API ve la tabla `infonavit_historico`, metadatos seguros de conexion, conteos por anio, conteos por metrica y presencia de las metricas esperadas. En PostgreSQL se consulta explicitamente `public.infonavit_historico`.
 
 ### Mini reporte JSON
 

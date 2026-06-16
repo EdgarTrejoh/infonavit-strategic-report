@@ -31,6 +31,38 @@ def _unique_strings(values: list[str]) -> list[str]:
     return unique
 
 
+def _historico_table_ref(engine) -> str:
+    if getattr(engine.dialect, "name", "") == "sqlite":
+        return "infonavit_historico"
+    return "public.infonavit_historico"
+
+
+def _connection_metadata(connection) -> dict:
+    if getattr(connection.dialect, "name", "") != "postgresql":
+        return {
+            "dialect": getattr(connection.dialect, "name", "unknown"),
+            "database": None,
+            "schema": None,
+            "user": None,
+        }
+    row = connection.execute(
+        text(
+            """
+            SELECT
+                current_database() AS database,
+                current_schema() AS schema,
+                current_user AS user
+            """
+        )
+    ).mappings().first()
+    return {
+        "dialect": "postgresql",
+        "database": row["database"] if row else None,
+        "schema": row["schema"] if row else None,
+        "user": row["user"] if row else None,
+    }
+
+
 def build_df_master_from_long_table(df: pd.DataFrame) -> pd.DataFrame:
     required_columns = {"anio", "mes", "estado", "linea", "producto", "metrica", "valor"}
     missing = required_columns - set(df.columns)
@@ -80,10 +112,11 @@ def validate_df_master_contract(df: pd.DataFrame) -> None:
 
 
 def load_df_master_from_db(engine, start_year: int | None = None, end_year: int | None = None) -> pd.DataFrame:
+    table_ref = _historico_table_ref(engine)
     query = text(
-        """
+        f"""
         SELECT anio, mes, estado, linea, producto, metrica, valor
-        FROM infonavit_historico
+        FROM {table_ref}
         WHERE metrica IN :metrica_monto_aliases
           AND (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
@@ -101,10 +134,11 @@ def load_df_master_from_db(engine, start_year: int | None = None, end_year: int 
 
 
 def load_long_metrics_from_db(engine, start_year: int | None = None, end_year: int | None = None) -> pd.DataFrame:
+    table_ref = _historico_table_ref(engine)
     query = text(
-        """
+        f"""
         SELECT anio, mes, estado, linea, producto, metrica, valor
-        FROM infonavit_historico
+        FROM {table_ref}
         WHERE metrica IN :metricas_extendidas
           AND (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
@@ -126,22 +160,23 @@ def load_long_metrics_from_db(engine, start_year: int | None = None, end_year: i
 
 
 def get_db_metrics_diagnostics(engine, start_year: int | None = None, end_year: int | None = None) -> dict:
+    table_ref = _historico_table_ref(engine)
     params = {
         "start_year": int(start_year) if start_year is not None else None,
         "end_year": int(end_year) if end_year is not None else None,
     }
     total_query = text(
-        """
+        f"""
         SELECT COUNT(*) AS filas
-        FROM infonavit_historico
+        FROM {table_ref}
         WHERE (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
         """
     )
     years_query = text(
-        """
+        f"""
         SELECT anio, COUNT(*) AS filas
-        FROM infonavit_historico
+        FROM {table_ref}
         WHERE (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
         GROUP BY anio
@@ -149,9 +184,9 @@ def get_db_metrics_diagnostics(engine, start_year: int | None = None, end_year: 
         """
     )
     metrics_query = text(
-        """
+        f"""
         SELECT metrica, COUNT(*) AS filas, MIN(anio) AS min_anio, MAX(anio) AS max_anio
-        FROM infonavit_historico
+        FROM {table_ref}
         WHERE (:start_year IS NULL OR anio >= :start_year)
           AND (:end_year IS NULL OR anio <= :end_year)
         GROUP BY metrica
@@ -160,6 +195,7 @@ def get_db_metrics_diagnostics(engine, start_year: int | None = None, end_year: 
     )
 
     with engine.connect() as connection:
+        connection_metadata = _connection_metadata(connection)
         total_rows = int(connection.execute(total_query, params).scalar() or 0)
         years = [dict(row) for row in connection.execute(years_query, params).mappings().all()]
         metrics = [dict(row) for row in connection.execute(metrics_query, params).mappings().all()]
@@ -168,7 +204,8 @@ def get_db_metrics_diagnostics(engine, start_year: int | None = None, end_year: 
     monto_aliases = _unique_strings(METRICA_MONTO_ALIASES)
     creditos_aliases = _unique_strings(METRICA_CREDITOS_ALIASES)
     return {
-        "table": "infonavit_historico",
+        "table": table_ref,
+        "connection": connection_metadata,
         "filters": {"start_year": start_year, "end_year": end_year},
         "rows_total": total_rows,
         "years": years,
