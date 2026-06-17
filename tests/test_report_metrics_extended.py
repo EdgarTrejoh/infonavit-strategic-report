@@ -136,6 +136,8 @@ def test_build_extended_context_calculates_ytd_monto_creditos_and_ticket_variati
     assert summary["ticket_promedio_actual"] == pytest.approx(14.0)
     assert summary["ticket_promedio_previo"] == pytest.approx(10.0)
     assert summary["ticket_promedio_variacion_pct"] == pytest.approx(40.0)
+    assert context["analysis_frame"]["main_signal"] == "monto_colocado_crece"
+    assert context["analysis_frame"]["portfolio_reading"] == "monto_colocado_crece_con_creditos_estables"
 
 
 def test_build_extended_context_handles_zero_creditos_safely():
@@ -236,6 +238,7 @@ def test_add_inflation_context_calculates_real_variations_with_compound_formula(
         item["key"] == "inflacion_inpc" and item["status"] == "integrado"
         for item in enriched["future_crosses"]
     )
+    assert enriched["analysis_frame"]["real_growth_interpretation"] == "monto_y_ticket_crecen_en_terminos_reales"
     json.dumps(enriched)
 
 
@@ -249,6 +252,22 @@ def test_add_inflation_context_warns_when_service_is_unavailable():
         "reason": "Inflation service not configured or unavailable",
     }
     assert any("No se integro inflacion comparable" in warning for warning in enriched["methodology"]["warnings"])
+    assert enriched["analysis_frame"]["real_growth_interpretation"] == "inflacion_no_disponible_o_insuficiente"
+
+
+def test_add_inflation_context_preserves_unavailable_reason_and_action():
+    context = build_extended_context(_long_metrics_df(), current_year=2026, previous_year=2025, month_limit=4)
+    unavailable = {
+        "available": False,
+        "reason": "No hay datos de INPC para month_limit solicitado.",
+        "suggested_action": "Usar month_limit igual al ultimo mes disponible para mantener comparabilidad YTD.",
+    }
+
+    enriched = add_inflation_context(context, unavailable)
+
+    assert enriched["inflation_context"] == unavailable
+    assert any("No se integro inflacion comparable" in warning for warning in enriched["methodology"]["warnings"])
+    assert enriched["analysis_frame"]["real_growth_interpretation"] == "inflacion_no_disponible_o_insuficiente"
 
 
 def test_extended_markdown_includes_inflation_section_when_available():
@@ -296,6 +315,7 @@ def test_line_family_analysis_calculates_nominal_and_real_variations():
     assert nueva["variations"]["ticket_nominal_pct"] == pytest.approx(0.0)
     assert nueva["variations"]["ticket_real_pct"] == pytest.approx((((1 + 0.0 / 100) / _inflation_payload()["factor"]) - 1) * 100)
     assert "presiona a la baja el ticket promedio agregado por efecto mezcla" in nueva["executive_reading"]
+    assert context["analysis_frame"]["mix_effect_direction"] == "mayor_peso_de_familia_con_ticket_menor_presiona_ticket_agregado"
     assert "gano participacion en monto colocado" in nueva["executive_reading"]
     assert mejoramiento["variations"]["monto_nominal_pct"] == pytest.approx(50.0)
 

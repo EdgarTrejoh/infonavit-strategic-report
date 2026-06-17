@@ -121,16 +121,22 @@ def test_fetch_average_period_inflation_returns_none_without_base_url(monkeypatc
     assert fetch_average_period_inflation(2026, 2025, 4) is None
 
 
-def test_fetch_average_period_inflation_returns_none_on_http_error(monkeypatch):
+def test_fetch_average_period_inflation_returns_unavailable_payload_on_http_error(monkeypatch):
     calls = []
 
     def fake_get(*args, **kwargs):
         calls.append(1)
-        return _FakeResponse(status_code=500)
+        return _FakeResponse(status_code=500, payload={"detail": "month_limit no disponible para el periodo solicitado"})
 
     monkeypatch.setattr("inflation_client.httpx.get", fake_get)
 
-    assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
+    payload = fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert payload == {
+        "available": False,
+        "reason": "month_limit no disponible para el periodo solicitado",
+        "suggested_action": "Usar month_limit igual al ultimo mes disponible para mantener comparabilidad YTD.",
+    }
     assert len(calls) == 1
 
 

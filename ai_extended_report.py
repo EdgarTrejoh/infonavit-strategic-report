@@ -14,6 +14,8 @@ from text_normalization import normalize_text_payload, repair_mojibake_text
 logger = logging.getLogger(__name__)
 
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
+PROMPT_VERSION = "ai_extended_report_system.v1"
+ENGINE_VERSION = "extended_report.v1"
 OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 PROMPT_PATH = Path(__file__).resolve().parent / "prompts" / "ai_extended_report_system.txt"
 AI_NOT_CONFIGURED = {"available": False, "reason": "AI service not configured"}
@@ -21,6 +23,7 @@ AI_UNAVAILABLE = {"available": False, "reason": "AI service unavailable"}
 EXPECTED_KEYS = {
     "available",
     "executive_thesis",
+    "executive_implication",
     "key_findings",
     "state_level_reading",
     "mix_effect_reading",
@@ -35,6 +38,7 @@ LEGACY_KEYS = {"committee_questions"}
 LIST_FIELDS = ["key_findings", "risks_or_caveats", "recommended_next_crosses", "analytical_questions"]
 TEXT_FIELDS = [
     "executive_thesis",
+    "executive_implication",
     "state_level_reading",
     "mix_effect_reading",
     "real_vs_nominal_reading",
@@ -93,6 +97,7 @@ def _safe_subset(extended_report: dict[str, Any]) -> dict[str, Any]:
         "inflation_context": extended_report.get("inflation_context", {}),
         "line_family_analysis": extended_report.get("line_family_analysis", {}),
         "rankings": extended_report.get("rankings", {}),
+        "analysis_frame": extended_report.get("analysis_frame", {}),
         "methodology": extended_report.get("methodology", {}),
         "warnings": extended_report.get("methodology", {}).get("warnings", []),
         "future_crosses": extended_report.get("future_crosses", {}),
@@ -109,7 +114,7 @@ def _build_user_prompt(extended_report: dict[str, Any]) -> str:
     payload = json.dumps(safe_report, ensure_ascii=False, allow_nan=False)
     return (
         "Interpreta el siguiente JSON extendido de INFONAVIT y devuelve unicamente JSON valido con esta estructura: "
-        '{"available": true, "executive_thesis": "", "key_findings": [], '
+        '{"available": true, "executive_thesis": "", "executive_implication": "", "key_findings": [], '
         '"state_level_reading": "", "mix_effect_reading": "", "real_vs_nominal_reading": "", '
         '"risks_or_caveats": [], "recommended_next_crosses": [], "analytical_questions": [], "linkedin_angle": "", '
         '"confidence": "medium"}.\n\n'
@@ -210,6 +215,55 @@ def _has_state_rankings(extended_report: dict[str, Any]) -> bool:
     return bool(rankings.get("estados_por_monto") or rankings.get("estados_por_creditos"))
 
 
+def _dominant_tokens(text: str) -> set[str]:
+    stopwords = {
+        "para",
+        "como",
+        "con",
+        "del",
+        "por",
+        "los",
+        "las",
+        "una",
+        "uno",
+        "que",
+        "este",
+        "esta",
+        "entre",
+        "reporte",
+        "analisis",
+        "infonavit",
+    }
+    normalized = _normalize_for_match(text)
+    return {
+        token
+        for token in re.findall(r"[a-z0-9_]+", normalized)
+        if len(token) >= 6 and token not in stopwords
+    }
+
+
+def _detect_quality_flags(normalized: dict[str, Any]) -> list[str]:
+    text_blocks = [
+        normalized.get("executive_thesis", ""),
+        normalized.get("executive_implication", ""),
+        normalized.get("mix_effect_reading", ""),
+        normalized.get("real_vs_nominal_reading", ""),
+        " ".join(normalized.get("key_findings", [])),
+    ]
+    token_sets = [_dominant_tokens(text) for text in text_blocks if text]
+    comparisons = 0
+    high_overlap = 0
+    for idx, left in enumerate(token_sets):
+        for right in token_sets[idx + 1 :]:
+            if not left or not right:
+                continue
+            comparisons += 1
+            overlap = len(left & right) / max(1, min(len(left), len(right)))
+            if overlap >= 0.65:
+                high_overlap += 1
+    return ["possible_redundancy"] if comparisons and high_overlap >= 2 else []
+
+
 def _normalize_ai_output(payload: dict[str, Any], extended_report: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
@@ -244,6 +298,7 @@ def _normalize_ai_output(payload: dict[str, Any], extended_report: dict[str, Any
             return None
     if normalized.get("confidence") not in VALID_CONFIDENCE:
         normalized["confidence"] = "medium"
+    normalized["quality_flags"] = _detect_quality_flags(normalized)
     normalized.pop("committee_questions", None)
     return normalized
 
@@ -314,6 +369,11 @@ def build_ai_response_payload(extended_report: dict[str, Any], ai_insight: dict[
             "line_family_analysis_available": extended_report.get("line_family_analysis", {}).get("available"),
         },
         "ai_insight": ai_insight,
+        "metadata": {
+            "ai_model": os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+            "prompt_version": PROMPT_VERSION,
+            "engine_version": ENGINE_VERSION,
+        },
     }
 
 
@@ -321,13 +381,32 @@ def render_ai_insight_markdown(payload: dict[str, Any]) -> str:
     insight = payload.get("ai_insight", {})
     if not insight.get("available"):
         reason = insight.get("reason", "AI service unavailable")
-        return f"# Analisis asistido INFONAVIT\n\nAnalisis asistido no disponible: {reason}.\n"
+        return f"# Análisis asistido INFONAVIT\n\nAnálisis asistido no disponible: {reason}.\n"
+
+    period = payload.get("period", {})
+    summary = payload.get("extended_report_summary", {})
+    metadata = payload.get("metadata", {})
+    confidence = insight.get("confidence", "medium")
+    inflation_text = "no disponible"
+    if summary.get("inflation_available"):
+        inflation_text = "disponible"
 
     lines = [
-        "# Analisis asistido INFONAVIT",
+        "# Análisis asistido INFONAVIT",
+        "",
+        "## Metadata",
+        f"- Periodo: {period.get('current_year')} vs {period.get('previous_year')}",
+        f"- Comparabilidad: {period.get('comparability', 'YTD comparable')}",
+        f"- Corte mensual: {period.get('month_limit')}",
+        f"- Inflación INPC: {inflation_text}",
+        f"- Confianza analítica: {confidence}",
+        f"- Modelo IA: {metadata.get('ai_model', DEFAULT_OPENAI_MODEL)}",
         "",
         "## Tesis ejecutiva",
         insight.get("executive_thesis", ""),
+        "",
+        "## Implicación ejecutiva",
+        insight.get("executive_implication", ""),
         "",
         "## Hallazgos clave",
     ]
@@ -348,9 +427,12 @@ def render_ai_insight_markdown(payload: dict[str, Any]) -> str:
         ]
     )
     lines.extend(f"- {item}" for item in insight.get("risks_or_caveats", []))
-    lines.extend(["", "## Preguntas para siguiente analisis"])
+    lines.extend(["", "## Preguntas para siguiente análisis"])
     lines.extend(f"- {item}" for item in insight.get("analytical_questions", []))
     lines.extend(["", "## Siguientes cruces recomendados"])
     lines.extend(f"- {item}" for item in insight.get("recommended_next_crosses", []))
-    lines.extend(["", "## Angulo para comunicacion", insight.get("linkedin_angle", "")])
+    if insight.get("quality_flags"):
+        lines.extend(["", "## Alertas de calidad narrativa"])
+        lines.extend(f"- {item}" for item in insight.get("quality_flags", []))
+    lines.extend(["", "## Ángulo para comunicación", insight.get("linkedin_angle", "")])
     return "\n".join(lines).strip() + "\n"

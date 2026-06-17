@@ -433,11 +433,11 @@ def test_mini_report_ai_markdown_renders_expected_sections(monkeypatch):
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/plain")
-    assert "Analisis asistido INFONAVIT" in response.text
+    assert "Análisis asistido INFONAVIT" in response.text
     assert "Tesis ejecutiva" in response.text
     assert "Hallazgos clave" in response.text
     assert "Lectura estatal" in response.text
-    assert "Preguntas para siguiente analisis" in response.text
+    assert "Preguntas para siguiente análisis" in response.text
     assert "Preguntas para comite" not in response.text
 
 
