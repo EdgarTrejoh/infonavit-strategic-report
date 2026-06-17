@@ -11,7 +11,8 @@ Estado actual:
 - Documentacion FastAPI desactivada en produccion con `ENVIRONMENT=production`.
 - Supabase PostgreSQL es la fuente de datos inicial.
 - `inflacion-copilot-api` es dependencia opcional para inflacion comparable en el reporte extendido.
-- Capa OpenAI validada en local y Cloud Run para la release `v0.8`.
+- Capa OpenAI validada en local y Cloud Run.
+- Validacion productiva end-to-end completada el 2026-06-17 con reporte extendido, inflacion comparable, IA y encoding UTF-8 correcto.
 
 ## 1. Pre-requisitos
 
@@ -80,6 +81,8 @@ Validaciones adicionales del reporte extendido:
 - Cada familia contiene participacion en monto, participacion en creditos y deltas en puntos porcentuales.
 - `ai_insight.available=true` cuando `OPENAI_API_KEY` esta configurada y el proveedor responde.
 - `recommended_next_crosses` solo contiene cruces pendientes declarados en `future_crosses`.
+- La salida JSON/Markdown no debe presentar mojibake como `crÃ©ditos`, `Ãndice` o `Â¿`.
+- Validacion productiva 2026-06-17: reporte extendido e IA respondieron correctamente con `monto_actual > 0`, `creditos_actual > 0`, `inflation_context.available=true` y `ai_insight.available=true`.
 
 ## 5. Seguridad minima antes de exponer publicamente
 

@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-136 passed
+140 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -320,11 +320,12 @@ Cada familia reporta monto, creditos, ticket promedio, variaciones nominales/rea
 
 ## 11. Analisis asistido por IA local
 
-Estado validado para `v0.8`:
+Estado validado:
 
 - Prueba local con OpenAI: exitosa.
 - Publicacion Cloud Run con OpenAI: validada y exitosa.
 - Los endpoints IA siguen protegidos con `X-API-Key`.
+- Validacion productiva end-to-end confirmada el 2026-06-17.
 
 Para habilitar IA localmente:
 
@@ -511,6 +512,48 @@ Requisitos para una validacion completa:
 - `INFLACION_COPILOT_URL` si se desea validar inflacion comparable local.
 
 El script no imprime valores de `.env`, API keys ni connection strings. Si alguna variable no existe, la prueba relacionada se marca como `skipped` o falla de forma controlada.
+
+### Validacion productiva end-to-end confirmada
+
+Estado confirmado el 2026-06-17:
+
+- `python -m pytest -q`: `140 passed`.
+- Cloud Run actualizado y respondiendo en `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
+- `/health`: OK publico.
+- `/db/health`: OK con `X-API-Key`.
+- `/diagnostics/db-metrics?start_year=2025&end_year=2026`: 10,904 filas visibles, 5,452 por metrica de monto/creditos y usuario `api_readonly`.
+- Servicio externo de inflacion: OK con `inflation_pct` comparable para 2026 vs 2025, corte a mes 4.
+- `/mini-report/extended/json`: OK con monto, creditos, ticket promedio, inflacion comparable, familias de linea y variaciones reales.
+- `/mini-report/ai/json`: OK con `ai_insight.available=true`.
+- Encoding validado leyendo el JSON guardado como UTF-8; no debe aparecer mojibake como `crÃ©ditos`, `Ãndice` o `Â¿`.
+
+Comando de referencia para guardar evidencia productiva:
+
+```powershell
+$API_BASE = "https://infonavit-strategic-report-api-490229283844.us-west1.run.app"
+$CURRENT_YEAR = 2026
+$PREVIOUS_YEAR = 2025
+$MONTH_LIMIT = 4
+
+New-Item -ItemType Directory -Force outputs\validation | Out-Null
+
+Invoke-WebRequest -Uri "$API_BASE/mini-report/extended/json?current_year=$CURRENT_YEAR&previous_year=$PREVIOUS_YEAR&month_limit=$MONTH_LIMIT" -Headers @{ "X-API-Key" = $env:INFONAVIT_API_KEY } -OutFile "outputs\validation\extended_cloudrun.json"
+Invoke-WebRequest -Uri "$API_BASE/mini-report/ai/json?current_year=$CURRENT_YEAR&previous_year=$PREVIOUS_YEAR&month_limit=$MONTH_LIMIT" -Headers @{ "X-API-Key" = $env:INFONAVIT_API_KEY } -OutFile "outputs\validation\ai_cloudrun.json"
+```
+
+Validacion puntual de encoding:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import json; d=json.load(open('outputs/validation/extended_cloudrun.json', encoding='utf-8')); print(repr(d['drivers']['linea_lider_monto'])); print(repr(d['drivers']['producto_lider_monto'])); print(repr(d['drivers']['estado_lider_monto']))"
+```
+
+Resultado esperado:
+
+```text
+'Línea II: Adquisición de vivienda nueva'
+'Crédito Tradicional'
+'Nuevo León'
+```
 
 ## 16. Notas de seguridad
 

@@ -2,7 +2,7 @@
 
 ## 1. Objetivo
 
-Definir la estrategia inicial para construir un frontend que consuma la API `infonavit-strategic-report-api` sin afectar la estabilidad del backend actual ni la version `v0.8` ya validada.
+Definir la estrategia inicial para construir un frontend que consuma la API `infonavit-strategic-report-api` sin afectar la estabilidad del backend actual validado en Cloud Run.
 
 El frontend debe facilitar el consumo del reporte extendido y del analisis asistido por IA para usuarios no tecnicos, manteniendo el backend como fuente de verdad.
 
@@ -22,7 +22,8 @@ Backend actual:
 - Seguridad minima: `X-API-Key`.
 - Documentacion FastAPI desactivada en produccion con `ENVIRONMENT=production`.
 - Release validada: `v0.8`.
-- Pruebas vigentes: `131 passed`.
+- Validacion productiva end-to-end completada el 2026-06-17.
+- Pruebas vigentes: `140 passed`.
 
 Endpoints relevantes:
 
@@ -51,7 +52,7 @@ Motivos:
 
 - Evita mezclar dependencias Python/backend con tooling frontend.
 - Permite versionar y desplegar frontend y API de forma independiente.
-- Reduce riesgo sobre la version `v0.8` ya estable.
+- Reduce riesgo sobre el backend productivo ya estable.
 - Facilita adoptar un patron server-side para no exponer `X-API-Key` en navegador.
 - Facilita controlar acceso por usuario antes de permitir descargas o uso de IA.
 - Facilita generar PDF en servidor sin exponer secretos ni cargar logica pesada en el navegador.
@@ -559,4 +560,4 @@ Avanzar con:
 6. Agregar PDF server-side con graficas y salida IA.
 7. Mantener el backend actual como API estable de solo lectura.
 
-Mientras tanto, continuar monitoreando `v0.8` en Cloud Run antes de ampliar funcionalidad productiva.
+Mientras tanto, continuar monitoreando Cloud Run antes de ampliar funcionalidad productiva y considerar formalizar el hito backend como `v0.9.0`.

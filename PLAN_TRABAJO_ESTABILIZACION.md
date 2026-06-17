@@ -199,13 +199,18 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `136 passed`.
+- Estado vigente de pruebas: `140 passed`.
 - Release GitHub creada: `v0.8`.
 - Prueba local con OpenAI validada y exitosa.
 - Publicacion en Cloud Run con OpenAI validada y exitosa.
 - Diagnostico DB protegido implementado en local: `/diagnostics/db-metrics`.
 - Validacion local posterior: 10,904 filas visibles para 2025-2026 y 5,452 filas por metrica de monto/creditos.
-- Pendiente operativo: desplegar nueva revision Cloud Run para incorporar diagnostico DB y lectura robusta de metricas UTF-8/mojibake.
+- Validacion productiva end-to-end completada el 2026-06-17:
+  - Cloud Run actualizado.
+  - `/diagnostics/db-metrics` confirma 10,904 filas para 2025-2026 y 5,452 filas por metrica de monto/creditos.
+  - `/mini-report/extended/json` recupera monto, creditos, ticket promedio, inflacion comparable, familias de linea y variaciones reales.
+  - `/mini-report/ai/json` responde con IA disponible, lectura estatal y cruces pendientes.
+  - Validacion de encoding en archivo JSON UTF-8 exitosa.
 - Historico: el primer bloque de pruebas minimas cerro originalmente con `14 passed, 1 warning`; se conserva solo como referencia de avance.
 - Politica de retencion/limpieza operativa agregada en modo seguro:
   - `retention.enabled: false`;
@@ -1436,7 +1441,8 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Validacion Cloud Run 2026-06-12: `/health` publico `200 OK`; endpoints protegidos sin `X-API-Key` responden `401`; `/db/health`, `/mini-report/json` y `/mini-report/markdown` con `X-API-Key` responden `200 OK`; JSON serializable; Markdown con 5 secciones; respuestas con `X-Request-ID`.
 - Analisis asistido por IA implementado y validado en local y Cloud Run.
 - Release GitHub `v0.8` creada.
-- Estado vigente de pruebas: `136 passed`.
+- Validacion productiva end-to-end 2026-06-17: Cloud Run actualizado; reporte extendido, inflacion comparable e IA validados exitosamente; encoding UTF-8 validado en archivo JSON.
+- Estado vigente de pruebas: `140 passed`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1447,7 +1453,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual local: `136 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual local: `140 passed`.
 
 ### Pendientes reales
 
@@ -1481,11 +1487,11 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 
 ### Prioridad inmediata
 
-1. Commit y push del bloque de diagnostico DB, lectura robusta de metricas y script `run_full_validation.ps1`.
-2. Desplegar nueva revision Cloud Run.
-3. Validar en Cloud Run `/diagnostics/db-metrics?start_year=2025&end_year=2026`; resultado esperado: 10,904 filas y metricas esperadas presentes.
-4. Validar en Cloud Run `/mini-report/extended/json` y `/mini-report/ai/json`; resultado esperado: `monto_actual > 0`, `creditos_actual > 0`, variaciones reales disponibles e IA con contexto no nulo.
-5. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
+1. Cerrar documentacion de validacion productiva end-to-end.
+2. Crear release/tag recomendado `v0.9.0` si se desea formalizar el hito productivo con inflacion e IA.
+3. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
+4. Definir control de acceso de siguiente nivel antes de exponer funcionalidades a usuarios finales.
+5. Iniciar estrategia frontend con base en `docs/FRONTEND_STRATEGY.md`.
 
 ### Preparacion productiva
 

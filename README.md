@@ -17,11 +17,11 @@ El proyecto esta orientado a ejecucion operativa local y a una API de solo lectu
 - PDF ejecutivo generado correctamente para 2026.
 - API FastAPI publicada en Cloud Run y validada.
 - Reporte extendido con inflacion comparable, familias de linea, efecto mezcla y lectura asistida por IA.
-- Release GitHub actual: `v0.8`.
-- Estado vigente de pruebas: `136 passed`.
+- Release GitHub actual: `v0.8`; siguiente release recomendada: `v0.9.0`.
+- Estado vigente de pruebas: `140 passed`.
 - Diagnostico protegido de metricas DB disponible en local: `/diagnostics/db-metrics`.
 - En PostgreSQL, la API consulta explicitamente `public.infonavit_historico` para evitar diferencias por `search_path`.
-- Pendiente operativo inmediato: desplegar nueva revision Cloud Run con diagnostico DB y lectura robusta de metricas UTF-8/mojibake.
+- Validacion productiva end-to-end completada el 2026-06-17: reporte extendido, inflacion comparable e IA responden correctamente en Cloud Run.
 
 ## Estructura
 
@@ -540,7 +540,7 @@ Reglas operativas:
 - Si un cruce no esta integrado, debe mantenerse como cruce pendiente.
 - `recommended_next_crosses` solo debe incluir cruces pendientes declarados en `future_crosses`.
 - La salida se normaliza para reparar mojibake comun de UTF-8 en consola/API y preferir terminos de dominio como `creditos formalizados`.
-- La prueba local y la publicacion Cloud Run con IA fueron validadas exitosamente para la version `v0.8`.
+- La prueba local y la publicacion Cloud Run con IA fueron validadas exitosamente; la validacion productiva end-to-end quedo confirmada el 2026-06-17.
 
 Ejemplo local:
 
@@ -667,13 +667,15 @@ Validacion realizada el 2026-06-12:
 
 No se imprimio ni documento el valor real de `INFONAVIT_API_KEY`.
 
-Validacion actualizada de `v0.8`:
+Validacion productiva actualizada el 2026-06-17:
 
 - Prueba local con OpenAI: exitosa.
 - Publicacion Cloud Run con OpenAI: validada y exitosa.
-- Validacion local posterior: `136 passed`; `/diagnostics/db-metrics` confirma 10,904 filas para 2025-2026 y 5,452 filas por metrica de monto/creditos.
-- La lectura local extendida recupera monto, creditos, ticket promedio, inflacion comparable y variaciones reales.
-- Cloud Run debe actualizarse con una nueva revision para incorporar `/diagnostics/db-metrics` y la lectura robusta de metricas; antes del deploy el endpoint productivo puede seguir devolviendo ceros para colocacion INFONAVIT.
+- Validacion local posterior: `140 passed`.
+- `/diagnostics/db-metrics` confirma 10,904 filas para 2025-2026 y 5,452 filas por metrica de monto/creditos con usuario `api_readonly`.
+- `/mini-report/extended/json` recupera monto, creditos, ticket promedio, familias de linea, inflacion comparable y variaciones reales.
+- `/mini-report/ai/json` responde con `ai_insight.available=true`, lectura estatal, cruces recomendados pendientes y salida normalizada sin mojibake.
+- Validacion de encoding mediante archivo JSON UTF-8: drivers esperados como `Línea II: Adquisición de vivienda nueva`, `Crédito Tradicional` y `Nuevo León`.
 - Endpoints IA protegidos con `X-API-Key`:
   - `/mini-report/ai/json`
   - `/mini-report/ai/markdown`
@@ -715,7 +717,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local del bloque de diagnostico DB se obtuvo `136 passed`.
+La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local productiva se obtuvo `140 passed`.
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -795,7 +797,7 @@ Estado validado en Supabase:
   - `grupos_duplicados`: 0
 - El migrador manual esta protegido: requiere `--run --yes` para ejecutar cambios.
 
-Pendientes recomendados posteriores a `v0.8`:
+Pendientes recomendados posteriores a la validacion productiva del 2026-06-17:
 
 - definir vistas/tablas analiticas para mini reporte;
 - ampliar fixture de Excel valido para multiples meses/productos si se requiere mayor cobertura;
@@ -803,7 +805,8 @@ Pendientes recomendados posteriores a `v0.8`:
 - monitoreo de latencia/costo Cloud Run;
 - presupuesto y alertas GCP;
 - politica de backups/restore Supabase;
-- autenticacion formal si la API se expone a usuarios externos.
+- autenticacion formal si la API se expone a usuarios externos;
+- crear release/tag recomendado `v0.9.0` para formalizar el hito productivo con reporte extendido, inflacion e IA.
 
 ## Autor y Fuente
 
