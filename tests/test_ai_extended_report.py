@@ -67,6 +67,7 @@ def _ai_payload(**overrides):
     payload = {
         "available": True,
         "executive_thesis": "La colocacion crece en terminos reales, aunque el ticket promedio retrocede.",
+        "executive_implication": "La lectura ejecutiva debe separar volumen, monto y composicion antes de interpretar el crecimiento.",
         "key_findings": ["Monto real positivo.", "Creditos al alza.", "Ticket real negativo."],
         "state_level_reading": "Nuevo Leon lidera por monto y Jalisco lidera por creditos, sin inferir causalidad regional.",
         "mix_effect_reading": "El efecto mezcla sugiere mayor peso de productos con ticket menor.",
@@ -107,10 +108,32 @@ def test_generate_ai_extended_insight_returns_structured_payload(monkeypatch):
     result = generate_ai_extended_insight(_extended_report())
 
     assert result["available"] is True
+    assert result["executive_implication"]
     assert result["confidence"] == "medium"
     assert result["state_level_reading"]
     assert calls[0]["json"]["model"] == "gpt-4.1-mini"
     assert calls[0]["headers"]["Authorization"] == "Bearer test-key"
+
+
+def test_generate_ai_extended_insight_prompt_includes_analysis_frame(monkeypatch):
+    calls = []
+    report = _extended_report()
+    report["analysis_frame"] = {
+        "main_signal": "creditos_y_monto_crecen_con_ticket_promedio_a_la_baja",
+        "mix_effect_direction": "mayor_peso_de_familia_con_ticket_menor_presiona_ticket_agregado",
+    }
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json)
+        return _FakeResponse(__import__("json").dumps(_ai_payload()))
+
+    monkeypatch.setattr("ai_extended_report.httpx.post", fake_post)
+
+    assert generate_ai_extended_insight(report)["available"] is True
+    user_prompt = calls[0]["messages"][1]["content"]
+    assert '"analysis_frame"' in user_prompt
+    assert "creditos_y_monto_crecen_con_ticket_promedio_a_la_baja" in user_prompt
 
 
 def test_generate_ai_extended_insight_uses_configured_model(monkeypatch):
@@ -147,6 +170,26 @@ def test_generate_ai_extended_insight_invalid_confidence_defaults_to_medium(monk
     assert result["confidence"] == "medium"
 
 
+def test_generate_ai_extended_insight_adds_quality_flag_for_redundancy(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    repeated = "Monto creditos ticket familia estado periodo comparable. " * 3
+    _mock_openai(
+        monkeypatch,
+        _ai_payload(
+            executive_thesis=repeated,
+            executive_implication=repeated,
+            mix_effect_reading=repeated,
+            real_vs_nominal_reading=repeated,
+            key_findings=[repeated, repeated, repeated],
+        ),
+    )
+
+    result = generate_ai_extended_insight(_extended_report())
+
+    assert result["available"] is True
+    assert "possible_redundancy" in result["quality_flags"]
+
+
 def test_generate_ai_extended_insight_maps_legacy_committee_questions(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     payload = _ai_payload()
@@ -165,6 +208,18 @@ def test_generate_ai_extended_insight_missing_required_field_returns_fallback(mo
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     payload = _ai_payload()
     del payload["executive_thesis"]
+    _mock_openai(monkeypatch, payload)
+
+    assert generate_ai_extended_insight(_extended_report()) == {
+        "available": False,
+        "reason": "AI service unavailable",
+    }
+
+
+def test_generate_ai_extended_insight_missing_executive_implication_returns_fallback(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    payload = _ai_payload()
+    del payload["executive_implication"]
     _mock_openai(monkeypatch, payload)
 
     assert generate_ai_extended_insight(_extended_report()) == {
@@ -354,15 +409,20 @@ def test_ai_response_payload_and_markdown_render_expected_sections():
 
     json.dumps(payload)
     assert payload["ai_insight"]["available"] is True
-    assert "# Analisis asistido INFONAVIT" in markdown
+    assert payload["metadata"]["prompt_version"] == "ai_extended_report_system.v1"
+    assert payload["metadata"]["engine_version"] == "extended_report.v1"
+    assert "# Análisis asistido INFONAVIT" in markdown
+    assert "## Metadata" in markdown
     assert "## Tesis ejecutiva" in markdown
+    assert "## Implicación ejecutiva" in markdown
     assert "## Hallazgos clave" in markdown
     assert "## Lectura estatal" in markdown
-    assert "## Preguntas para siguiente analisis" in markdown
+    assert "## Preguntas para siguiente análisis" in markdown
+    assert "## Ángulo para comunicación" in markdown
     assert "## Preguntas para comite" not in markdown
 
 
 def test_ai_markdown_renders_fallback_message():
     markdown = render_ai_insight_markdown({"ai_insight": {"available": False, "reason": "AI service not configured"}})
 
-    assert "Analisis asistido no disponible: AI service not configured." in markdown
+    assert "Análisis asistido no disponible: AI service not configured." in markdown

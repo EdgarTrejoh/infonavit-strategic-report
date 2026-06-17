@@ -49,6 +49,30 @@ def _is_valid_inflation_payload(payload: dict[str, Any]) -> bool:
     return factor > 0
 
 
+def _unavailable_payload(reason: str, suggested_action: str | None = None) -> dict[str, Any]:
+    payload = {
+        "available": False,
+        "reason": reason or INFLATION_SERVICE_UNAVAILABLE_REASON,
+    }
+    if suggested_action:
+        payload["suggested_action"] = suggested_action
+    return payload
+
+
+def _extract_error_payload(response: httpx.Response) -> dict[str, Any]:
+    try:
+        payload = response.json()
+    except ValueError:
+        return _unavailable_payload(INFLATION_SERVICE_UNAVAILABLE_REASON)
+    if not isinstance(payload, dict):
+        return _unavailable_payload(INFLATION_SERVICE_UNAVAILABLE_REASON)
+    reason = payload.get("detail") or payload.get("reason") or INFLATION_SERVICE_UNAVAILABLE_REASON
+    suggested_action = payload.get("suggested_action")
+    if suggested_action is None and "month_limit" in str(reason).lower():
+        suggested_action = "Usar month_limit igual al ultimo mes disponible para mantener comparabilidad YTD."
+    return _unavailable_payload(str(reason), suggested_action)
+
+
 def fetch_average_period_inflation(
     current_year: int,
     previous_year: int,
@@ -85,7 +109,7 @@ def fetch_average_period_inflation(
             return None
         if response.status_code != 200:
             logger.warning("Inflation service unavailable status_code=%s", response.status_code)
-            return None
+            return _extract_error_payload(response)
         payload = response.json()
     except ValueError as exc:
         logger.warning("Inflation service request failed error_type=%s", type(exc).__name__)

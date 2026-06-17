@@ -401,6 +401,91 @@ def _ranking(
     return _json_safe(grouped.to_dict(orient="records"))
 
 
+def _build_analysis_frame(context: dict[str, Any]) -> dict[str, str | None]:
+    summary = context.get("summary", {})
+    inflation = context.get("inflation_context", {})
+    family_analysis = context.get("line_family_analysis", {})
+    rankings = context.get("rankings", {})
+
+    monto_pct = summary.get("monto_variacion_pct")
+    creditos_pct = summary.get("creditos_variacion_pct")
+    ticket_pct = summary.get("ticket_promedio_variacion_pct")
+    monto_real_pct = inflation.get("monto_variacion_real_pct")
+    ticket_real_pct = inflation.get("ticket_variacion_real_pct")
+    aggregate_ticket = summary.get("ticket_promedio_actual")
+
+    main_signal = "sin_senal_principal_determinada"
+    if (
+        creditos_pct is not None
+        and monto_pct is not None
+        and ticket_pct is not None
+        and creditos_pct > 0
+        and monto_pct > 0
+        and ticket_pct < 0
+    ):
+        main_signal = "creditos_y_monto_crecen_con_ticket_promedio_a_la_baja"
+    elif monto_pct is not None and monto_pct > 0:
+        main_signal = "monto_colocado_crece"
+    elif monto_pct is not None and monto_pct < 0:
+        main_signal = "monto_colocado_disminuye"
+
+    portfolio_reading = "lectura_no_determinada"
+    if main_signal == "creditos_y_monto_crecen_con_ticket_promedio_a_la_baja":
+        portfolio_reading = "expansion_de_colocacion_con_mayor_volumen_y_menor_ticket_promedio"
+    elif main_signal == "monto_colocado_crece" and creditos_pct is not None and creditos_pct == 0:
+        portfolio_reading = "monto_colocado_crece_con_creditos_estables"
+    elif creditos_pct is not None and creditos_pct > 0:
+        portfolio_reading = "volumen_de_creditos_al_alza"
+    elif creditos_pct is not None and creditos_pct < 0:
+        portfolio_reading = "volumen_de_creditos_a_la_baja"
+
+    mix_effect_direction = "sin_senal_de_efecto_mezcla"
+    for family in family_analysis.get("families", []) or []:
+        variations = family.get("variations", {})
+        current = family.get("current", {})
+        if (
+            variations.get("share_creditos_delta_pp") is not None
+            and variations.get("share_creditos_delta_pp") > 0
+            and current.get("ticket_promedio") is not None
+            and aggregate_ticket is not None
+            and current.get("ticket_promedio") < aggregate_ticket
+        ):
+            mix_effect_direction = "mayor_peso_de_familia_con_ticket_menor_presiona_ticket_agregado"
+            break
+
+    real_growth_interpretation = "inflacion_no_disponible_o_insuficiente"
+    if monto_real_pct is not None and ticket_real_pct is not None:
+        if monto_real_pct > 0 and ticket_real_pct < 0:
+            real_growth_interpretation = "monto_crece_en_terminos_reales_y_ticket_real_disminuye"
+        elif monto_real_pct > 0 and ticket_real_pct >= 0:
+            real_growth_interpretation = "monto_y_ticket_crecen_en_terminos_reales"
+        elif monto_real_pct < 0:
+            real_growth_interpretation = "monto_disminuye_en_terminos_reales"
+
+    estados_monto = rankings.get("estados_por_monto") or []
+    estados_creditos = rankings.get("estados_por_creditos") or []
+    state_concentration_signal = "rankings_estatales_no_disponibles"
+    if estados_monto or estados_creditos:
+        top_monto = estados_monto[0].get("nombre") if estados_monto else None
+        top_creditos = estados_creditos[0].get("nombre") if estados_creditos else None
+        if top_monto and top_creditos and top_monto == top_creditos:
+            state_concentration_signal = "mismo_estado_lidera_monto_y_creditos"
+        elif top_monto and top_creditos:
+            state_concentration_signal = "lideres_estatales_difieren_entre_monto_y_creditos"
+        else:
+            state_concentration_signal = "ranking_estatal_parcial_disponible"
+
+    return _json_safe(
+        {
+            "main_signal": main_signal,
+            "portfolio_reading": portfolio_reading,
+            "mix_effect_direction": mix_effect_direction,
+            "real_growth_interpretation": real_growth_interpretation,
+            "state_concentration_signal": state_concentration_signal,
+        }
+    )
+
+
 def build_extended_context(
     df: pd.DataFrame,
     current_year: int,
@@ -517,6 +602,7 @@ def build_extended_context(
             *FUTURE_CROSSES,
         ],
     }
+    context["analysis_frame"] = _build_analysis_frame(context)
     return _json_safe(context)
 
 
@@ -555,6 +641,18 @@ def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any
         }
         if INFLATION_WARNING not in warnings:
             warnings.append(INFLATION_WARNING)
+        enriched["analysis_frame"] = _build_analysis_frame(enriched)
+        return _json_safe(enriched)
+
+    if inflation_data.get("available") is False:
+        enriched["inflation_context"] = {
+            "available": False,
+            "reason": inflation_data.get("reason", INFLATION_UNAVAILABLE_REASON),
+            "suggested_action": inflation_data.get("suggested_action"),
+        }
+        if INFLATION_WARNING not in warnings:
+            warnings.append(INFLATION_WARNING)
+        enriched["analysis_frame"] = _build_analysis_frame(enriched)
         return _json_safe(enriched)
 
     summary = enriched.get("summary", {})
@@ -591,4 +689,5 @@ def add_inflation_context(context: dict[str, Any], inflation_data: dict[str, Any
             enriched.get("summary", {}).get("ticket_promedio_actual"),
         )
     enriched["future_crosses"] = _mark_future_cross_integrated(future_crosses, "inflacion_inpc")
+    enriched["analysis_frame"] = _build_analysis_frame(enriched)
     return _json_safe(enriched)
