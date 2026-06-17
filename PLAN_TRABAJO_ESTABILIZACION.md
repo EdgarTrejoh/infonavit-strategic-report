@@ -1282,6 +1282,7 @@ La API integra OpenAI de forma opcional para interpretar el JSON extendido; no g
 - `recommended_next_crosses` queda restringido a cruces pendientes declarados en `future_crosses`.
 - La salida incluye lectura estatal cuando existen rankings por estado.
 - Se bloquean o limpian conceptos no sustentados por el JSON, por ejemplo riesgo crediticio, calidad del portafolio, demanda o estrategia.
+- Se agrega normalizacion de salida para reparar mojibake UTF-8 y evitar terminos ambiguos como `creditos otorgados` o `crecimiento solido`.
 - Prueba local con OpenAI: validada y exitosa.
 - Publicacion en Cloud Run con OpenAI: validada y exitosa.
 - Release GitHub asociada: `v0.8`.

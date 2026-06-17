@@ -539,6 +539,7 @@ Reglas operativas:
 - No afirmar causalidad que no este sustentada por el JSON.
 - Si un cruce no esta integrado, debe mantenerse como cruce pendiente.
 - `recommended_next_crosses` solo debe incluir cruces pendientes declarados en `future_crosses`.
+- La salida se normaliza para reparar mojibake comun de UTF-8 en consola/API y preferir terminos de dominio como `creditos formalizados`.
 - La prueba local y la publicacion Cloud Run con IA fueron validadas exitosamente para la version `v0.8`.
 
 Ejemplo local:

@@ -48,7 +48,7 @@ def _extended_report():
             },
             {
                 "key": "indice_shf",
-                "label": "Índice SHF de Precios de la Vivienda",
+                "label": "\u00cdndice SHF de Precios de la Vivienda",
                 "status": "pendiente",
                 "intended_use": "Contrastar contra precios de vivienda.",
             },
@@ -189,7 +189,7 @@ def test_generate_ai_extended_insight_uses_full_future_cross_labels(monkeypatch)
 
     result = generate_ai_extended_insight(_extended_report())
 
-    assert "Índice SHF de Precios de la Vivienda" in result["recommended_next_crosses"]
+    assert "\u00cdndice SHF de Precios de la Vivienda" in result["recommended_next_crosses"]
     assert "indice SHF" not in result["recommended_next_crosses"]
     assert "Salario minimo" in result["recommended_next_crosses"]
     assert "Derechohabientes IMSS" in result["recommended_next_crosses"]
@@ -215,7 +215,7 @@ def test_generate_ai_extended_insight_recommended_crosses_only_uses_pending_futu
     result = generate_ai_extended_insight(_extended_report())
 
     assert result["recommended_next_crosses"] == [
-        "Índice SHF de Precios de la Vivienda",
+        "\u00cdndice SHF de Precios de la Vivienda",
         "Salario minimo",
         "Derechohabientes IMSS",
     ]
@@ -260,13 +260,13 @@ def test_generate_ai_extended_insight_falls_back_when_text_field_has_unsupported
 def test_ai_output_preserves_accents_in_json_and_markdown(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     payload = _ai_payload(
-        executive_thesis="El crédito muestra una lectura prudente para adquisición.",
+        executive_thesis="El cr\u00e9dito muestra una lectura prudente para adquisici\u00f3n.",
         key_findings=[
-            "Los créditos formalizados aumentaron.",
-            "La adquisición de vivienda existente ganó peso.",
-            "¿Cuál es el siguiente cruce metodológico?",
+            "Los cr\u00e9ditos formalizados aumentaron.",
+            "La adquisici\u00f3n de vivienda existente gan\u00f3 peso.",
+            "\u00bfCu\u00e1l es el siguiente cruce metodol\u00f3gico?",
         ],
-        analytical_questions=["¿Cuál familia explica más el cambio?"],
+        analytical_questions=["\u00bfCu\u00e1l familia explica m\u00e1s el cambio?"],
     )
 
     monkeypatch.setattr(
@@ -279,9 +279,38 @@ def test_ai_output_preserves_accents_in_json_and_markdown(monkeypatch):
     markdown = render_ai_insight_markdown(response_payload)
 
     json.dumps(response_payload, ensure_ascii=False)
-    assert "crédito" in result["executive_thesis"]
-    assert "adquisición" in markdown
-    assert "¿Cuál" in markdown
+    assert "cr\u00e9dito" in result["executive_thesis"]
+    assert "adquisici\u00f3n" in markdown
+    assert "\u00bfCu\u00e1l" in markdown
+
+
+def test_generate_ai_extended_insight_repairs_mojibake_and_polishes_domain_terms(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    payload = _ai_payload(
+        executive_thesis="El cr\u00c3\u00a9dito tiene crecimiento s\u00c3\u00b3lido en cr\u00c3\u00a9ditos otorgados.",
+        key_findings=[
+            "Los cr\u00c3\u00a9ditos otorgados aumentaron.",
+            "El crecimiento s\u00c3\u00b3lido del monto se mantiene.",
+            "La adquisici\u00c3\u00b3n gana peso.",
+        ],
+        linkedin_angle="Crecimiento s\u00c3\u00b3lido en cr\u00c3\u00a9ditos otorgados.",
+    )
+
+    monkeypatch.setattr(
+        "ai_extended_report.httpx.post",
+        lambda *args, **kwargs: _FakeResponse(json.dumps(payload, ensure_ascii=False)),
+    )
+
+    result = generate_ai_extended_insight(_extended_report())
+    joined = json.dumps(result, ensure_ascii=False)
+
+    assert result["available"] is True
+    assert "cr\u00e9dito" in joined
+    assert "cr\u00e9ditos formalizados" in joined
+    assert "crecimiento observado" in joined
+    assert "otorgados" not in joined
+    assert "cr\u00c3" not in joined
+    assert "\u00c2" not in joined
 
 
 def test_generate_ai_extended_insight_invalid_json_returns_fallback(monkeypatch):

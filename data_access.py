@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import bindparam, text
 
 import config
+from text_normalization import repair_mojibake_text
 
 METRICA_MONTO = "Monto de crédito Infonavit"
 METRICA_CREDITOS = "Número de créditos formalizados"
@@ -11,6 +12,10 @@ METRICA_MONTO_UTF8 = "Monto de crédito Infonavit"
 METRICA_CREDITOS_UTF8 = "Número de créditos formalizados"
 METRICA_MONTO_MOJIBAKE = "Monto de cr\u00c3\u00a9dito Infonavit"
 METRICA_CREDITOS_MOJIBAKE = "N\u00c3\u00bamero de cr\u00c3\u00a9ditos formalizados"
+METRICA_MONTO = repair_mojibake_text(METRICA_MONTO)
+METRICA_CREDITOS = repair_mojibake_text(METRICA_CREDITOS)
+METRICA_MONTO_UTF8 = repair_mojibake_text(METRICA_MONTO_UTF8)
+METRICA_CREDITOS_UTF8 = repair_mojibake_text(METRICA_CREDITOS_UTF8)
 METRICA_MONTO_ALIASES = [METRICA_MONTO, METRICA_MONTO_UTF8, METRICA_MONTO_MOJIBAKE]
 METRICA_CREDITOS_ALIASES = [METRICA_CREDITOS, METRICA_CREDITOS_UTF8, METRICA_CREDITOS_MOJIBAKE]
 METRICAS_EXTENDIDAS = [*METRICA_MONTO_ALIASES, *METRICA_CREDITOS_ALIASES]

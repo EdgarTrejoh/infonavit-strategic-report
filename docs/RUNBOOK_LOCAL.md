@@ -357,6 +357,8 @@ Validar que la respuesta de IA mantenga estas reglas:
 - No usa variables ya integradas como monto colocado, creditos, ticket promedio, composicion por familia, rankings por estado o inflacion integrada.
 - Incluye lectura estatal cuando hay rankings por estado.
 - No usa dimensiones no contenidas en el JSON, como riesgo crediticio, calidad del portafolio, demanda o estrategia.
+- No debe mostrar mojibake como `crÃ©ditos` o `Â¿CuÃ¡l`; la salida esperada debe estar normalizada a UTF-8 legible.
+- Debe preferir `creditos formalizados` y evitar `creditos otorgados` en la narrativa.
 
 ## 12. Retencion / higiene operativa
 

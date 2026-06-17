@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from text_normalization import normalize_text_payload, repair_mojibake_text
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,24 @@ SENSITIVE_MARKERS = {
     "postgresql://",
     "postgresql+psycopg2://",
 }
+PHRASE_REPLACEMENTS = {
+    "créditos otorgados": "créditos formalizados",
+    "credito otorgado": "credito formalizado",
+    "crédito otorgado": "crédito formalizado",
+    "otorgados": "formalizados",
+    "otorgado": "formalizado",
+    "crecimiento sólido": "crecimiento observado",
+    "crecimiento solido": "crecimiento observado",
+}
+PHRASE_REPLACEMENTS.update(
+    {
+        "creditos otorgados": "creditos formalizados",
+        "cr\u00e9ditos otorgados": "cr\u00e9ditos formalizados",
+        "creditos otorgado": "creditos formalizado",
+        "cr\u00e9dito otorgado": "cr\u00e9dito formalizado",
+        "crecimiento s\u00f3lido": "crecimiento observado",
+    }
+)
 
 
 def _load_system_prompt() -> str:
@@ -68,7 +87,7 @@ def _load_system_prompt() -> str:
 
 
 def _safe_subset(extended_report: dict[str, Any]) -> dict[str, Any]:
-    return {
+    return normalize_text_payload({
         "period": extended_report.get("period", {}),
         "summary": extended_report.get("summary", {}),
         "inflation_context": extended_report.get("inflation_context", {}),
@@ -77,7 +96,7 @@ def _safe_subset(extended_report: dict[str, Any]) -> dict[str, Any]:
         "methodology": extended_report.get("methodology", {}),
         "warnings": extended_report.get("methodology", {}).get("warnings", []),
         "future_crosses": extended_report.get("future_crosses", {}),
-    }
+    })
 
 
 def _validate_minimum_report(extended_report: dict[str, Any]) -> bool:
@@ -96,6 +115,13 @@ def _build_user_prompt(extended_report: dict[str, Any]) -> str:
         '"confidence": "medium"}.\n\n'
         f"JSON extendido:\n{payload}"
     )
+
+
+def _polish_ai_text(value: Any) -> str:
+    text = repair_mojibake_text(value)
+    for source, replacement in PHRASE_REPLACEMENTS.items():
+        text = re.sub(re.escape(source), replacement, text, flags=re.IGNORECASE)
+    return text
 
 
 def _contains_sensitive_marker(text: str) -> bool:
@@ -126,7 +152,7 @@ def _future_cross_items(extended_report: dict[str, Any]) -> list[dict[str, str]]
         return [
             {
                 "key": str(item.get("key", "")),
-                "label": str(item["label"]),
+                "label": repair_mojibake_text(item["label"]),
             }
             for item in future_crosses
             if isinstance(item, dict) and item.get("label") and item.get("status") != "integrado"
@@ -139,6 +165,8 @@ def _future_cross_items(extended_report: dict[str, Any]) -> list[dict[str, str]]
             items.append({"key": "salario_minimo", "label": "Salario minimo"})
         if "imss_derechohabientes" in future_crosses:
             items.append({"key": "imss_derechohabientes", "label": "Derechohabientes IMSS"})
+        for item in items:
+            item["label"] = repair_mojibake_text(item["label"])
         return items
     return []
 
@@ -201,8 +229,9 @@ def _normalize_ai_output(payload: dict[str, Any], extended_report: dict[str, Any
 
     normalized = dict(payload)
     for field in LIST_FIELDS:
+        polished_items = [_polish_ai_text(item) for item in normalized[field]]
         normalized[field] = [
-            str(item) for item in normalized[field] if not _contains_unsupported_terms(str(item), extended_report)
+            item for item in polished_items if not _contains_unsupported_terms(item, extended_report)
         ]
     normalized["key_findings"] = normalized["key_findings"][:5]
     normalized["analytical_questions"] = normalized["analytical_questions"][:5]
@@ -210,6 +239,7 @@ def _normalize_ai_output(payload: dict[str, Any], extended_report: dict[str, Any
         normalized["recommended_next_crosses"], extended_report
     )
     for field in TEXT_FIELDS:
+        normalized[field] = _polish_ai_text(normalized[field])
         if _contains_unsupported_terms(normalized[field], extended_report):
             return None
     if normalized.get("confidence") not in VALID_CONFIDENCE:

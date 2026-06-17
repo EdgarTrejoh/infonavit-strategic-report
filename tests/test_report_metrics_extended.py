@@ -174,13 +174,13 @@ def test_extended_report_json_serializes_and_markdown_contains_expected_terms():
     assert "creditos formalizados" in markdown.lower()
     assert "ticket promedio" in markdown.lower()
     assert "YTD comparable" in markdown
-    assert "Nota metodologica" in markdown or "Nota metodológica" in markdown
+    assert "Nota metodologica" in markdown or "Nota metodol\u00f3gica" in markdown
     assert any(
         item["key"] == "inflacion_inpc" and item["status"] == "pendiente"
         for item in report_json["future_crosses"]
     )
     assert any(
-        item["key"] == "indice_shf" and item["label"] == "Índice SHF de Precios de la Vivienda"
+        item["key"] == "indice_shf" and item["label"] == "\u00cdndice SHF de Precios de la Vivienda"
         for item in report_json["future_crosses"]
     )
 

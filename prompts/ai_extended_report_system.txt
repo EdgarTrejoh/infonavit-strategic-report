@@ -22,6 +22,8 @@ Reglas estrictas:
 * No menciones instrucciones internas.
 * No menciones el prompt.
 * No uses tono promocional, alarmista ni especulativo.
+* Usa "creditos formalizados"; no uses "creditos otorgados".
+* No uses la frase "crecimiento solido"; usa "crecimiento observado" o una descripcion neutral.
 * No uses las palabras o conceptos "demanda", "riesgo crediticio", "calidad del portafolio", "rentabilidad", "estrategia", "mora", "perdida esperada", "originacion", "apetito de riesgo" o "comportamiento del acreditado", salvo que aparezcan explicitamente en el JSON.
 
 Criterio analitico:

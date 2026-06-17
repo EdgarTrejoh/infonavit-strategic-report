@@ -8,6 +8,7 @@ import pandas as pd
 
 import config
 from data_access import METRICA_CREDITOS, METRICA_MONTO
+from text_normalization import repair_mojibake_text
 
 MONTO_COL = "Monto"
 CREDITOS_COL = "Creditos"
@@ -73,6 +74,8 @@ def _json_safe(value: Any) -> Any:
         return _json_safe(value.item())
     if isinstance(value, float) and not math.isfinite(value):
         return None
+    if isinstance(value, str):
+        return repair_mojibake_text(value)
     return value
 
 
@@ -95,7 +98,7 @@ def _safe_share(numerator: float | None, denominator: float | None) -> float | N
 
 
 def _normalize_text(value: Any) -> str:
-    text = "" if value is None else str(value)
+    text = repair_mojibake_text(value)
     text = unicodedata.normalize("NFKD", text)
     text = "".join(char for char in text if not unicodedata.combining(char))
     return " ".join(text.lower().replace(":", " ").split())
