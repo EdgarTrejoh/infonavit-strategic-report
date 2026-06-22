@@ -17,7 +17,7 @@ python -m pytest -q
 Resultado esperado actual:
 
 ```text
-140 passed
+144 passed
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -517,7 +517,7 @@ El script no imprime valores de `.env`, API keys ni connection strings. Si algun
 
 Estado confirmado el 2026-06-17:
 
-- `python -m pytest -q`: `140 passed`.
+- `python -m pytest -q`: `144 passed`.
 - Cloud Run actualizado y respondiendo en `https://infonavit-strategic-report-api-490229283844.us-west1.run.app`.
 - `/health`: OK publico.
 - `/db/health`: OK con `X-API-Key`.

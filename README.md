@@ -17,8 +17,8 @@ El proyecto esta orientado a ejecucion operativa local y a una API de solo lectu
 - PDF ejecutivo generado correctamente para 2026.
 - API FastAPI publicada en Cloud Run y validada.
 - Reporte extendido con inflacion comparable, familias de linea, efecto mezcla y lectura asistida por IA.
-- Release GitHub actual: `v0.8`; siguiente release recomendada: `v0.9.0`.
-- Estado vigente de pruebas: `140 passed`.
+- Release GitHub actual: `v0.10.0-ai-executive-engine`.
+- Estado vigente de pruebas: `144 passed`.
 - Diagnostico protegido de metricas DB disponible en local: `/diagnostics/db-metrics`.
 - En PostgreSQL, la API consulta explicitamente `public.infonavit_historico` para evitar diferencias por `search_path`.
 - Validacion productiva end-to-end completada el 2026-06-17: reporte extendido, inflacion comparable e IA responden correctamente en Cloud Run.
@@ -671,7 +671,7 @@ Validacion productiva actualizada el 2026-06-17:
 
 - Prueba local con OpenAI: exitosa.
 - Publicacion Cloud Run con OpenAI: validada y exitosa.
-- Validacion local posterior: `140 passed`.
+- Validacion local posterior: `144 passed`.
 - `/diagnostics/db-metrics` confirma 10,904 filas para 2025-2026 y 5,452 filas por metrica de monto/creditos con usuario `api_readonly`.
 - `/mini-report/extended/json` recupera monto, creditos, ticket promedio, familias de linea, inflacion comparable y variaciones reales.
 - `/mini-report/ai/json` responde con `ai_insight.available=true`, lectura estatal, cruces recomendados pendientes y salida normalizada sin mojibake.
@@ -717,7 +717,7 @@ Cobertura minima actual:
 Resultado esperado actual:
 
 ```text
-La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local productiva se obtuvo `140 passed`.
+La suite completa debe pasar con `python -m pytest -q`. En la ultima validacion local productiva se obtuvo `144 passed`.
 ```
 
 El warning historico de pandas/pyarrow dejo de aparecer tras la actualizacion a `pandas==3.0.3`.
@@ -806,7 +806,7 @@ Pendientes recomendados posteriores a la validacion productiva del 2026-06-17:
 - presupuesto y alertas GCP;
 - politica de backups/restore Supabase;
 - autenticacion formal si la API se expone a usuarios externos;
-- crear release/tag recomendado `v0.9.0` para formalizar el hito productivo con reporte extendido, inflacion e IA.
+- mantener el hito productivo documentado en `v0.10.0-ai-executive-engine` y crear nuevos tags solo para cambios posteriores validados.
 
 ## Autor y Fuente
 

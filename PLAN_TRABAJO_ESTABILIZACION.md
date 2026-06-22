@@ -199,7 +199,7 @@ python main.py
 - README operativo actualizado y corregido en ASCII/UTF-8.
 - `.gitignore` profesional aplicado; datos productivos, salidas, logs, manifests y entornos locales quedan fuera del versionamiento.
 - `SII_concentrado_v3.csv`, `viz.py.bak` y `salidas_viz_final/.gitkeep` fueron retirados del indice de Git sin borrar archivos locales.
-- Estado vigente de pruebas: `140 passed`.
+- Estado vigente de pruebas: `144 passed`.
 - Release GitHub creada: `v0.8`.
 - Prueba local con OpenAI validada y exitosa.
 - Publicacion en Cloud Run con OpenAI validada y exitosa.
@@ -1442,7 +1442,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - Analisis asistido por IA implementado y validado en local y Cloud Run.
 - Release GitHub `v0.8` creada.
 - Validacion productiva end-to-end 2026-06-17: Cloud Run actualizado; reporte extendido, inflacion comparable e IA validados exitosamente; encoding UTF-8 validado en archivo JSON.
-- Estado vigente de pruebas: `140 passed`.
+- Estado vigente de pruebas: `144 passed`.
 - Quitar emojis y simbolos Unicode de mensajes operativos.
 - Agregar alerta cuando la entrada configurada sea carpeta y no existan `.xls` o `.xlsx`.
 - Validar anios definidos en `config.yaml` contra los anios disponibles en el dataset.
@@ -1453,7 +1453,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 - `datos_error/` se usa para copias de archivos fallidos o rechazados.
 - README operativo actualizado y documento obsoleto `docs/project_state.md` eliminado.
 - Se adopto YTD comparable como criterio base para graficas YoY/CAGR con anio parcial.
-- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual local: `140 passed`.
+- Nivel minimo inicial de pruebas definido e implementado con `pytest`; estado actual local: `144 passed`.
 
 ### Pendientes reales
 
@@ -1488,7 +1488,7 @@ Registrar aqui las decisiones que deben cerrarse antes o durante la estabilizaci
 ### Prioridad inmediata
 
 1. Cerrar documentacion de validacion productiva end-to-end.
-2. Crear release/tag recomendado `v0.9.0` si se desea formalizar el hito productivo con inflacion e IA.
+2. Mantener el hito productivo documentado en `v0.10.0-ai-executive-engine`; crear nuevos tags solo para cambios posteriores validados.
 3. Monitorear Cloud Run publicado: logs, latencia, errores 4xx/5xx, costo y dependencia externa de inflacion/OpenAI.
 4. Definir control de acceso de siguiente nivel antes de exponer funcionalidades a usuarios finales.
 5. Iniciar estrategia frontend con base en `docs/FRONTEND_STRATEGY.md`.

@@ -21,9 +21,9 @@ Backend actual:
 - Fuente de datos: Supabase PostgreSQL read-only.
 - Seguridad minima: `X-API-Key`.
 - Documentacion FastAPI desactivada en produccion con `ENVIRONMENT=production`.
-- Release validada: `v0.8`.
+- Release validada: `v0.10.0-ai-executive-engine`.
 - Validacion productiva end-to-end completada el 2026-06-17.
-- Pruebas vigentes: `140 passed`.
+- Pruebas vigentes: `144 passed`.
 
 Endpoints relevantes:
 
@@ -560,4 +560,4 @@ Avanzar con:
 6. Agregar PDF server-side con graficas y salida IA.
 7. Mantener el backend actual como API estable de solo lectura.
 
-Mientras tanto, continuar monitoreando Cloud Run antes de ampliar funcionalidad productiva y considerar formalizar el hito backend como `v0.9.0`.
+Mientras tanto, continuar monitoreando Cloud Run antes de ampliar funcionalidad productiva y crear nuevos tags solo para cambios posteriores validados.
