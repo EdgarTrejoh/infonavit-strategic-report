@@ -49,6 +49,29 @@ def _is_valid_inflation_payload(payload: dict[str, Any]) -> bool:
     return factor > 0
 
 
+def _is_valid_monthly_comparable_payload(payload: dict[str, Any]) -> bool:
+    required = {"current_year", "previous_year", "month_limit", "factors"}
+    if not required.issubset(payload) or not isinstance(payload.get("factors"), list):
+        return False
+    try:
+        int(payload["current_year"])
+        int(payload["previous_year"])
+        int(payload["month_limit"])
+    except (TypeError, ValueError):
+        return False
+    for item in payload["factors"]:
+        if not isinstance(item, dict) or "month" not in item or "factor" not in item:
+            return False
+        try:
+            month = int(item["month"])
+            factor = float(item["factor"])
+        except (TypeError, ValueError):
+            return False
+        if month < 1 or month > 12 or factor <= 0:
+            return False
+    return True
+
+
 def _unavailable_payload(reason: str, suggested_action: str | None = None) -> dict[str, Any]:
     payload = {
         "available": False,
@@ -117,5 +140,53 @@ def fetch_average_period_inflation(
 
     if not isinstance(payload, dict) or not _is_valid_inflation_payload(payload):
         logger.warning("Inflation service returned invalid payload")
+        return None
+    return payload
+
+
+def fetch_monthly_comparable_inflation(
+    current_year: int,
+    previous_year: int,
+    month_limit: int,
+    base_url: str | None = None,
+) -> dict[str, Any] | None:
+    service_url = (base_url or os.getenv("INFLACION_COPILOT_URL") or "").strip()
+    if not service_url:
+        return None
+
+    url = f"{service_url.rstrip('/')}/inflation/monthly-comparable"
+    params = {
+        "current_year": int(current_year),
+        "previous_year": int(previous_year),
+        "month_limit": int(month_limit),
+    }
+
+    timeout = _get_timeout_seconds()
+    response = None
+    for attempt in (1, 2):
+        try:
+            response = httpx.get(url, params=params, timeout=timeout)
+            break
+        except httpx.ReadTimeout:
+            logger.warning("Monthly inflation service timeout attempt=%s", attempt)
+            if attempt == 2:
+                return None
+        except httpx.HTTPError as exc:
+            logger.warning("Monthly inflation service request failed error_type=%s", type(exc).__name__)
+            return None
+
+    try:
+        if response is None:
+            return None
+        if response.status_code != 200:
+            logger.warning("Monthly inflation service unavailable status_code=%s", response.status_code)
+            return _extract_error_payload(response)
+        payload = response.json()
+    except ValueError as exc:
+        logger.warning("Monthly inflation service request failed error_type=%s", type(exc).__name__)
+        return None
+
+    if not isinstance(payload, dict) or not _is_valid_monthly_comparable_payload(payload):
+        logger.warning("Monthly inflation service returned invalid payload")
         return None
     return payload

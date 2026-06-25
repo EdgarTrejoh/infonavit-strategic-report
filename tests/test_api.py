@@ -5,6 +5,7 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 import api.main as api_main
+from data_access import METRICA_CREDITOS, METRICA_MONTO
 
 TEST_API_KEY = "test-api-key"
 
@@ -30,6 +31,67 @@ def _fake_df_master():
             "nombre_estado": ["Nuevo León"],
             "Monto": [120.0],
         }
+    )
+
+
+def _fake_long_metrics_for_series():
+    return pd.DataFrame(
+        [
+            {
+                "anio": 2025,
+                "mes": 1,
+                "estado": 1,
+                "linea": "Linea II: Adquisicion de vivienda nueva",
+                "producto": "Producto A",
+                "metrica": METRICA_MONTO,
+                "valor": 100.0,
+            },
+            {
+                "anio": 2025,
+                "mes": 1,
+                "estado": 1,
+                "linea": "Linea II: Adquisicion de vivienda nueva",
+                "producto": "Producto A",
+                "metrica": METRICA_CREDITOS,
+                "valor": 10.0,
+            },
+            {
+                "anio": 2026,
+                "mes": 1,
+                "estado": 1,
+                "linea": "Linea II: Adquisicion de vivienda nueva",
+                "producto": "Producto A",
+                "metrica": METRICA_MONTO,
+                "valor": 120.0,
+            },
+            {
+                "anio": 2026,
+                "mes": 1,
+                "estado": 1,
+                "linea": "Linea II: Adquisicion de vivienda nueva",
+                "producto": "Producto A",
+                "metrica": METRICA_CREDITOS,
+                "valor": 12.0,
+            },
+            {
+                "anio": 2026,
+                "mes": 1,
+                "estado": 9,
+                "linea": "Linea IV: Mejoramientos",
+                "producto": "Producto B",
+                "metrica": METRICA_MONTO,
+                "valor": 50.0,
+            },
+            {
+                "anio": 2026,
+                "mes": 1,
+                "estado": 9,
+                "linea": "Linea IV: Mejoramientos",
+                "producto": "Producto B",
+                "metrica": METRICA_CREDITOS,
+                "valor": 0.0,
+            },
+        ]
     )
 
 
@@ -387,6 +449,112 @@ def test_mini_report_extended_markdown_returns_plain_text(monkeypatch):
     assert response.headers["content-type"].startswith("text/plain")
     assert "Reporte ejecutivo INFONAVIT extendido" in response.text
     assert "Ticket promedio" in response.text
+
+
+def test_mini_report_analytics_series_json_rejects_request_without_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+
+    response = _client().get("/mini-report/analytics/series/json")
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_analytics_series_json_rejects_invalid_api_key(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+
+    response = _client().get("/mini-report/analytics/series/json", headers={"X-API-Key": "wrong"})
+
+    assert response.status_code == 401
+    _assert_no_sensitive_error_details(response.text)
+
+
+def test_mini_report_analytics_series_json_returns_monthly_contract(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+    monkeypatch.setattr(api_main, "load_long_metrics_from_db", lambda engine, start_year=None, end_year=None: _fake_long_metrics_for_series())
+    captured_inflation_params = {}
+
+    def fake_fetch_monthly_comparable_inflation(current_year, previous_year, month_limit):
+        captured_inflation_params.update(
+            {
+                "current_year": current_year,
+                "previous_year": previous_year,
+                "month_limit": month_limit,
+            }
+        )
+        return {
+            "factors": [{"month": 1, "factor": 1.04}],
+            "source": "INEGI / BigQuery",
+            "indicator": "INPC - General",
+            "method": "monthly_comparable_factor",
+        }
+
+    monkeypatch.setattr(
+        api_main,
+        "fetch_monthly_comparable_inflation",
+        fake_fetch_monthly_comparable_inflation,
+    )
+
+    response = _client().get(
+        "/mini-report/analytics/series/json?current_year=2026&previous_year=2025&month_limit=1",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"]
+    assert captured_inflation_params == {"current_year": 2026, "previous_year": 2025, "month_limit": 1}
+    payload = response.json()
+    assert set(payload) == {"period", "series", "bcg", "metadata"}
+    assert payload["period"] == {
+        "current_year": 2026,
+        "previous_year": 2025,
+        "month_limit": 1,
+        "grain": "monthly_family",
+    }
+    assert payload["metadata"]["source"] == "infonavit_historico"
+    assert payload["metadata"]["grain"] == "monthly_family"
+    assert payload["series"]
+    row = next(item for item in payload["series"] if item["year"] == 2026 and item["family"] == "adquisicion_vivienda_nueva")
+    assert row["date"] == "2026-01-01"
+    assert row["month"] == 1
+    assert row["monto"] == 120.0
+    assert row["creditos"] == 12.0
+    assert row["ticket_promedio"] == 10.0
+    assert row["inflation_factor"] == 1.04
+    assert row["monto_real"] == 120.0 / 1.04
+    assert row["ticket_real"] == 10.0 / 1.04
+    previous_row = next(item for item in payload["series"] if item["year"] == 2025)
+    assert previous_row["inflation_factor"] == 1.0
+    assert previous_row["monto_real"] == previous_row["monto"]
+    assert previous_row["ticket_real"] == previous_row["ticket_promedio"]
+    zero_creditos = next(item for item in payload["series"] if item["family"] == "mejoramiento")
+    assert zero_creditos["ticket_promedio"] is None
+    assert "adquisicion_vivienda_existente" not in {item["family"] for item in payload["series"]}
+    assert payload["bcg"]
+
+
+def test_mini_report_analytics_series_json_keeps_real_values_null_without_inflation(monkeypatch):
+    _configure_api_key(monkeypatch)
+    monkeypatch.setattr(api_main, "engine", object())
+    monkeypatch.setattr(api_main, "load_long_metrics_from_db", lambda engine, start_year=None, end_year=None: _fake_long_metrics_for_series())
+    monkeypatch.setattr(api_main, "fetch_monthly_comparable_inflation", lambda current_year, previous_year, month_limit: None)
+
+    response = _client().get(
+        "/mini-report/analytics/series/json?current_year=2026&previous_year=2025&month_limit=1",
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {"period", "series", "bcg", "metadata"}
+    row = next(item for item in payload["series"] if item["year"] == 2026)
+    assert row["inflation_factor"] is None
+    assert row["monto_real"] is None
+    assert row["ticket_real"] is None
+    assert any("No se integro inflacion comparable" in warning for warning in payload["metadata"]["warnings"])
 
 
 def test_mini_report_ai_json_rejects_request_without_api_key(monkeypatch):

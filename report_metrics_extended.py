@@ -17,6 +17,7 @@ INFLATION_UNAVAILABLE_REASON = "Inflation service not configured or unavailable"
 INFLATION_WARNING = (
     "No se integro inflacion comparable porque el servicio de inflacion no estuvo disponible o no fue configurado."
 )
+BCG_EXCLUDED_PRODUCTS = {"apoyo infonavit"}
 LINE_FAMILIES = [
     {
         "family": "Adquisicion de vivienda nueva",
@@ -32,6 +33,32 @@ LINE_FAMILIES = [
         "family": "Mejoramiento",
         "line_match": "Linea IV: Mejoramientos",
         "match_terms": ["mejoramiento", "mejoramientos", "mejoras", "l4 mejoras"],
+    },
+]
+ANALYTICS_SERIES_FAMILIES = [
+    {
+        "family": "adquisicion_vivienda_nueva",
+        "family_label": "Adquisicion vivienda nueva",
+        "match_terms": ["vivienda nueva", "l2 nueva", "linea ii adquisicion de vivienda nueva"],
+        "required": True,
+    },
+    {
+        "family": "adquisicion_vivienda_existente",
+        "family_label": "Adquisicion vivienda existente",
+        "match_terms": ["vivienda existente", "l2 existente"],
+        "required": True,
+    },
+    {
+        "family": "mejoramiento",
+        "family_label": "Mejoramiento",
+        "match_terms": ["mejoramiento", "mejoramientos", "mejoras", "l4 mejoras"],
+        "required": True,
+    },
+    {
+        "family": "construccion_vivienda",
+        "family_label": "Construccion vivienda",
+        "match_terms": ["construccion", "linea iii", "l3 construccion"],
+        "required": False,
     },
 ]
 FUTURE_CROSSES = [
@@ -97,6 +124,16 @@ def _safe_share(numerator: float | None, denominator: float | None) -> float | N
     return (float(numerator) / float(denominator)) * 100
 
 
+def _is_valid_bcg_point(product: Any, monto: float, creditos: float, ticket: float | None) -> bool:
+    if _normalize_text(product) in BCG_EXCLUDED_PRODUCTS:
+        return False
+    if monto <= 0 or creditos <= 0:
+        return False
+    if ticket is None or ticket <= 0:
+        return False
+    return True
+
+
 def _normalize_text(value: Any) -> str:
     text = repair_mojibake_text(value)
     text = unicodedata.normalize("NFKD", text)
@@ -108,6 +145,38 @@ def _real_variation_pct(nominal_pct: float | None, inflation_factor: float | Non
     if nominal_pct is None or inflation_factor in (None, 0):
         return None
     return (((1 + float(nominal_pct) / 100) / float(inflation_factor)) - 1) * 100
+
+
+def _usable_inflation_factor(inflation_data: dict[str, Any] | None) -> float | None:
+    if not inflation_data or inflation_data.get("available") is False:
+        return None
+    try:
+        factor = float(inflation_data.get("factor"))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(factor) or factor <= 0:
+        return None
+    return factor
+
+
+def _monthly_inflation_factor_map(inflation_data: dict[str, Any] | None) -> dict[int, float] | None:
+    if not inflation_data or inflation_data.get("available") is False:
+        return None
+    factors = inflation_data.get("factors")
+    if not isinstance(factors, list):
+        return None
+    mapped = {}
+    for item in factors:
+        if not isinstance(item, dict):
+            continue
+        try:
+            month = int(item.get("month"))
+            factor = float(item.get("factor"))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= month <= 12 and math.isfinite(factor) and factor > 0:
+            mapped[month] = factor
+    return mapped
 
 
 def _estado_catalog() -> dict[int, str]:
@@ -157,6 +226,226 @@ def build_extended_analytic_df(df: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     return pivot.reset_index(drop=True)
+
+
+def _tag_analytics_families(df: pd.DataFrame) -> pd.DataFrame:
+    data = df.copy()
+    data["_linea_norm"] = data["linea"].map(_normalize_text) if not data.empty else []
+    data["family"] = None
+    data["family_label"] = None
+
+    for family_config in ANALYTICS_SERIES_FAMILIES:
+        terms = [_normalize_text(term) for term in family_config["match_terms"]]
+        mask = data["_linea_norm"].map(lambda text: any(term in text for term in terms))
+        data.loc[mask, "family"] = family_config["family"]
+        data.loc[mask, "family_label"] = family_config["family_label"]
+
+    return data.drop(columns=["_linea_norm"])
+
+
+def _safe_numeric_total(series: pd.Series) -> float:
+    return float(pd.to_numeric(series, errors="coerce").fillna(0.0).sum())
+
+
+def _series_warnings(
+    tagged: pd.DataFrame,
+    month_limit: int,
+    monthly_inflation_factors: dict[int, float] | None,
+) -> list[str]:
+    warnings = []
+    if month_limit < 12:
+        warnings.append("Comparacion mensual YTD: no incluye anios completos.")
+    if monthly_inflation_factors is None:
+        warnings.append(INFLATION_WARNING)
+
+    for family_config in ANALYTICS_SERIES_FAMILIES:
+        family_data = tagged[tagged["family"] == family_config["family"]]
+        if family_data.empty:
+            if family_config["required"]:
+                warnings.append(f"No se encontraron datos para la familia {family_config['family']}.")
+            continue
+
+        monto = _safe_numeric_total(family_data[MONTO_COL])
+        creditos = _safe_numeric_total(family_data[CREDITOS_COL])
+        if family_config["family"] == "construccion_vivienda" and (monto <= 0 or creditos <= 0):
+            warnings.append(
+                "Construccion vivienda se excluyo de las series porque no tiene monto y creditos suficientes."
+            )
+        elif creditos <= 0:
+            warnings.append(
+                f"La familia {family_config['family']} tiene creditos cero o invalidos; ticket_promedio se devolvera null."
+            )
+    return warnings
+
+
+def build_monthly_analytics_series_payload(
+    df: pd.DataFrame,
+    current_year: int,
+    previous_year: int,
+    month_limit: int | None = None,
+    inflation_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    data = build_extended_analytic_df(df)
+    months_used = _detect_month_limit(data, current_year, month_limit)
+    data = data[
+        (data["anio"].isin([previous_year, current_year]))
+        & (data["mes"] <= months_used)
+    ].copy()
+
+    tagged = _tag_analytics_families(data)
+    tagged = tagged.dropna(subset=["family"]).copy()
+    monthly_inflation_factors = _monthly_inflation_factor_map(inflation_data)
+    warnings = _series_warnings(tagged, months_used, monthly_inflation_factors)
+
+    construction = tagged[tagged["family"] == "construccion_vivienda"]
+    if not construction.empty:
+        has_construction_monto = _safe_numeric_total(construction[MONTO_COL]) > 0
+        has_construction_creditos = _safe_numeric_total(construction[CREDITOS_COL]) > 0
+        if not (has_construction_monto and has_construction_creditos):
+            tagged = tagged[tagged["family"] != "construccion_vivienda"].copy()
+
+    grouped = (
+        tagged.groupby(["anio", "mes", "fecha", "family", "family_label"], as_index=False)
+        .agg({MONTO_COL: "sum", CREDITOS_COL: "sum"})
+        .sort_values(["anio", "mes", "family"])
+        .reset_index(drop=True)
+    )
+    grouped["ticket_promedio"] = grouped.apply(
+        lambda row: _safe_div(float(row[MONTO_COL]), float(row[CREDITOS_COL])),
+        axis=1,
+    )
+    for row in grouped[grouped[CREDITOS_COL] <= 0].to_dict(orient="records"):
+        warning = (
+            f"La familia {row['family']} tiene creditos cero o invalidos en "
+            f"{int(row['anio'])}-{int(row['mes']):02d}; ticket_promedio se devolvera null."
+        )
+        if warning not in warnings:
+            warnings.append(warning)
+
+    series = []
+    for row in grouped.to_dict(orient="records"):
+        monto = float(row[MONTO_COL])
+        creditos = float(row[CREDITOS_COL])
+        ticket = row["ticket_promedio"]
+        year = int(row["anio"])
+        month = int(row["mes"])
+        if monthly_inflation_factors is None:
+            inflation_factor = None
+        elif year == previous_year:
+            inflation_factor = 1.0
+        else:
+            inflation_factor = monthly_inflation_factors.get(month)
+            if inflation_factor is None:
+                warning = (
+                    f"No se encontro factor de inflacion mensual comparable para {current_year}-{month:02d}; "
+                    "monto_real y ticket_real se devolveran null para ese mes."
+                )
+                if warning not in warnings:
+                    warnings.append(warning)
+        monto_real = None if inflation_factor is None else monto / inflation_factor
+        ticket_real = None if inflation_factor is None or ticket is None else float(ticket) / inflation_factor
+        series.append(
+            {
+                "date": row["fecha"].strftime("%Y-%m-%d"),
+                "year": year,
+                "month": month,
+                "family": row["family"],
+                "family_label": row["family_label"],
+                "monto": monto,
+                "creditos": creditos,
+                "ticket_promedio": ticket,
+                "inflation_factor": inflation_factor,
+                "monto_real": monto_real,
+                "ticket_real": ticket_real,
+            }
+        )
+
+    bcg = _build_analytics_bcg(tagged, current_year, previous_year, months_used)
+    return _json_safe(
+        {
+            "period": {
+                "current_year": int(current_year),
+                "previous_year": int(previous_year),
+                "month_limit": int(months_used),
+                "grain": "monthly_family",
+            },
+            "series": series,
+            "bcg": bcg,
+            "metadata": {
+                "source": "infonavit_historico",
+                "grain": "monthly_family",
+                "warnings": warnings,
+            },
+        }
+    )
+
+
+def _build_analytics_bcg(
+    tagged: pd.DataFrame,
+    current_year: int,
+    previous_year: int,
+    month_limit: int,
+) -> list[dict[str, Any]]:
+    if tagged.empty:
+        return []
+    current = tagged[(tagged["anio"] == current_year) & (tagged["mes"] <= month_limit)].copy()
+    previous = tagged[(tagged["anio"] == previous_year) & (tagged["mes"] <= month_limit)].copy()
+    if current.empty:
+        return []
+
+    current_grouped = (
+        current.groupby(["family", "family_label", "producto"], as_index=False)
+        .agg({MONTO_COL: "sum", CREDITOS_COL: "sum"})
+        .rename(columns={MONTO_COL: "monto", CREDITOS_COL: "creditos"})
+    )
+    current_grouped["ticket_promedio"] = current_grouped.apply(
+        lambda row: _safe_div(float(row["monto"]), float(row["creditos"])),
+        axis=1,
+    )
+    current_grouped = current_grouped[
+        current_grouped.apply(
+            lambda row: _is_valid_bcg_point(
+                row["producto"],
+                float(row["monto"]),
+                float(row["creditos"]),
+                row["ticket_promedio"],
+            ),
+            axis=1,
+        )
+    ].copy()
+    if current_grouped.empty:
+        return []
+
+    previous_grouped = (
+        previous.groupby(["family", "producto"], as_index=False)
+        .agg({MONTO_COL: "sum", CREDITOS_COL: "sum"})
+        .rename(columns={MONTO_COL: "monto_previous", CREDITOS_COL: "creditos_previous"})
+    )
+    merged = current_grouped.merge(previous_grouped, on=["family", "producto"], how="left")
+    total_monto = float(merged["monto"].sum())
+    records = []
+    for row in merged.to_dict(orient="records"):
+        monto = float(row["monto"])
+        creditos = float(row["creditos"])
+        ticket = row["ticket_promedio"]
+        monto_previous = row.get("monto_previous")
+        creditos_previous = row.get("creditos_previous")
+        records.append(
+            {
+                "family": row["family"],
+                "family_label": repair_mojibake_text(row["family_label"]),
+                "product": repair_mojibake_text(row["producto"]),
+                "monto": monto,
+                "creditos": creditos,
+                "ticket_promedio": ticket,
+                "share_monto_pct": _safe_share(monto, total_monto),
+                "monto_growth_pct": None if pd.isna(monto_previous) else _safe_pct(monto, float(monto_previous)),
+                "creditos_growth_pct": None
+                if pd.isna(creditos_previous)
+                else _safe_pct(creditos, float(creditos_previous)),
+            }
+        )
+    return records
 
 
 def _detect_month_limit(df: pd.DataFrame, current_year: int, month_limit: int | None) -> int:

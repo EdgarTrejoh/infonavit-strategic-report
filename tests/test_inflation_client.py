@@ -1,6 +1,6 @@
 import httpx
 
-from inflation_client import fetch_average_period_inflation
+from inflation_client import fetch_average_period_inflation, fetch_monthly_comparable_inflation
 
 
 class _FakeResponse:
@@ -25,6 +25,24 @@ def _inflation_payload():
         "source": "INEGI / BigQuery",
         "indicator": "INPC - General",
         "method": "inflation_pct = ((avg_inpc_current_period / avg_inpc_previous_period) - 1) * 100",
+    }
+
+
+def _monthly_inflation_payload():
+    return {
+        "current_year": 2026,
+        "previous_year": 2025,
+        "month_limit": 4,
+        "comparability": "monthly comparable",
+        "source": "INEGI / BigQuery",
+        "indicator": "INPC - General",
+        "method": "factor = inpc_current_month / inpc_previous_year_same_month",
+        "factors": [
+            {"month": 1, "factor": 1.04, "inflation_pct": 4.0},
+            {"month": 2, "factor": 1.05, "inflation_pct": 5.0},
+            {"month": 3, "factor": 1.06, "inflation_pct": 6.0},
+            {"month": 4, "factor": 1.07, "inflation_pct": 7.0},
+        ],
     }
 
 
@@ -187,3 +205,47 @@ def test_fetch_average_period_inflation_returns_none_on_invalid_payload(monkeypa
     monkeypatch.setattr("inflation_client.httpx.get", lambda *args, **kwargs: _FakeResponse(payload={"factor": 1.0}))
 
     assert fetch_average_period_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None
+
+
+def test_fetch_monthly_comparable_inflation_builds_expected_request(monkeypatch):
+    calls = []
+    monkeypatch.delenv("INFLACION_COPILOT_TIMEOUT_SECONDS", raising=False)
+
+    def fake_get(url, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        return _FakeResponse(payload=_monthly_inflation_payload())
+
+    monkeypatch.setattr("inflation_client.httpx.get", fake_get)
+
+    payload = fetch_monthly_comparable_inflation(
+        current_year=2026,
+        previous_year=2025,
+        month_limit=4,
+        base_url="https://inflacion.example.test/",
+    )
+
+    assert payload["factors"][0] == {"month": 1, "factor": 1.04, "inflation_pct": 4.0}
+    assert calls == [
+        {
+            "url": "https://inflacion.example.test/inflation/monthly-comparable",
+            "params": {"current_year": 2026, "previous_year": 2025, "month_limit": 4},
+            "timeout": 20.0,
+        }
+    ]
+
+
+def test_fetch_monthly_comparable_inflation_returns_unavailable_payload_on_404(monkeypatch):
+    monkeypatch.setattr(
+        "inflation_client.httpx.get",
+        lambda *args, **kwargs: _FakeResponse(status_code=404, payload={"detail": "No hay factores mensuales."}),
+    )
+
+    payload = fetch_monthly_comparable_inflation(2026, 2025, 4, base_url="https://inflacion.example.test")
+
+    assert payload == {"available": False, "reason": "No hay factores mensuales."}
+
+
+def test_fetch_monthly_comparable_inflation_returns_none_on_invalid_payload(monkeypatch):
+    monkeypatch.setattr("inflation_client.httpx.get", lambda *args, **kwargs: _FakeResponse(payload={"factors": []}))
+
+    assert fetch_monthly_comparable_inflation(2026, 2025, 4, base_url="https://inflacion.example.test") is None

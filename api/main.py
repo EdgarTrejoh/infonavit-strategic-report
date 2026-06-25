@@ -18,10 +18,10 @@ from data_access import (
     validate_df_master_contract,
 )
 from database import engine, health_check
-from inflation_client import fetch_average_period_inflation
+from inflation_client import fetch_average_period_inflation, fetch_monthly_comparable_inflation
 from mini_report_extended import generate_extended_report
 from mini_report import generate_mini_report
-from report_metrics_extended import add_inflation_context, build_extended_context
+from report_metrics_extended import add_inflation_context, build_extended_context, build_monthly_analytics_series_payload
 from report_metrics import build_ai_context
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,61 @@ def _build_extended_report(
         raise HTTPException(status_code=500, detail="No se pudo generar el mini reporte extendido.") from exc
 
 
+def _build_analytics_series(
+    current_year: int,
+    previous_year: int,
+    month_limit: int | None,
+    start_year: int | None,
+    end_year: int | None,
+    request_id: str | None = None,
+) -> dict:
+    if engine is None:
+        raise HTTPException(status_code=503, detail=SAFE_DB_ERROR)
+
+    try:
+        total_start = time.perf_counter()
+        db_start = time.perf_counter()
+        long_df = load_long_metrics_from_db(engine, start_year=start_year, end_year=end_year)
+        db_ms = round((time.perf_counter() - db_start) * 1000, 2)
+
+        metrics_start = time.perf_counter()
+        context = build_extended_context(
+            long_df,
+            current_year=current_year,
+            previous_year=previous_year,
+            month_limit=month_limit,
+        )
+        months_used = int(context.get("period", {}).get("month_limit") or month_limit or 12)
+        inflation_data = fetch_monthly_comparable_inflation(
+            current_year=current_year,
+            previous_year=previous_year,
+            month_limit=months_used,
+        )
+        payload = build_monthly_analytics_series_payload(
+            long_df,
+            current_year=current_year,
+            previous_year=previous_year,
+            month_limit=months_used,
+            inflation_data=inflation_data,
+        )
+        json.dumps(payload, ensure_ascii=False)
+        metrics_ms = round((time.perf_counter() - metrics_start) * 1000, 2)
+        total_ms = round((time.perf_counter() - total_start) * 1000, 2)
+        logger.info(
+            "mini_report_analytics_series_pipeline db_ms=%s metrics_ms=%s total_ms=%s request_id=%s",
+            db_ms,
+            metrics_ms,
+            total_ms,
+            request_id,
+        )
+        return payload
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("No se pudo generar series analiticas mensuales: %s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="No se pudo generar las series analiticas mensuales.") from exc
+
+
 @app.get("/mini-report/json")
 def mini_report_json(
     request: Request,
@@ -308,6 +363,27 @@ def mini_report_extended_markdown(
         request_id=getattr(request.state, "request_id", None),
     )
     return markdown
+
+
+@app.get("/mini-report/analytics/series/json")
+def mini_report_analytics_series_json(
+    request: Request,
+    _: None = Depends(require_api_key),
+    current_year: int = Query(2026, ge=2000, le=2100),
+    previous_year: int = Query(2025, ge=2000, le=2100),
+    month_limit: int | None = Query(None, ge=1, le=12),
+    start_year: int | None = Query(None, ge=2000, le=2100),
+    end_year: int | None = Query(None, ge=2000, le=2100),
+):
+    _validate_report_params(current_year, previous_year, start_year, end_year)
+    return _build_analytics_series(
+        current_year=current_year,
+        previous_year=previous_year,
+        month_limit=month_limit,
+        start_year=start_year,
+        end_year=end_year,
+        request_id=getattr(request.state, "request_id", None),
+    )
 
 
 @app.get("/mini-report/ai/json")

@@ -5,7 +5,12 @@ import pytest
 
 from data_access import METRICA_CREDITOS, METRICA_MONTO
 from mini_report_extended import generate_extended_report
-from report_metrics_extended import add_inflation_context, build_extended_analytic_df, build_extended_context
+from report_metrics_extended import (
+    add_inflation_context,
+    build_extended_analytic_df,
+    build_extended_context,
+    build_monthly_analytics_series_payload,
+)
 
 
 def _long_metrics_df():
@@ -75,6 +80,24 @@ def _inflation_payload():
     }
 
 
+def _monthly_inflation_payload():
+    return {
+        "current_year": 2026,
+        "previous_year": 2025,
+        "month_limit": 4,
+        "comparability": "monthly comparable",
+        "source": "INEGI / BigQuery",
+        "indicator": "INPC - General",
+        "method": "factor = inpc_current_month / inpc_previous_year_same_month",
+        "factors": [
+            {"month": 1, "factor": 1.04, "inflation_pct": 4.0},
+            {"month": 2, "factor": 1.05, "inflation_pct": 5.0},
+            {"month": 3, "factor": 1.06, "inflation_pct": 6.0},
+            {"month": 4, "factor": 1.07, "inflation_pct": 7.0},
+        ],
+    }
+
+
 def _line_family_df():
     rows = []
     families = [
@@ -113,6 +136,42 @@ def _line_family_df():
     return pd.DataFrame(rows)
 
 
+def _bcg_quality_df():
+    rows = []
+    products = [
+        ("CrÃ©dito Tradicional", 100.0, 10.0),
+        ("Apoyo Infonavit", 100.0, 10.0),
+        ("Producto Sin Monto", 0.0, 10.0),
+        ("Producto Sin Creditos", 100.0, 0.0),
+        ("Producto Ticket Negativo", -100.0, 10.0),
+    ]
+    for year in [2025, 2026]:
+        for product, monto, creditos in products:
+            rows.extend(
+                [
+                    {
+                        "anio": year,
+                        "mes": 1,
+                        "estado": 1,
+                        "linea": "Linea II: Adquisicion de vivienda nueva",
+                        "producto": product,
+                        "metrica": METRICA_MONTO,
+                        "valor": monto,
+                    },
+                    {
+                        "anio": year,
+                        "mes": 1,
+                        "estado": 1,
+                        "linea": "Linea II: Adquisicion de vivienda nueva",
+                        "producto": product,
+                        "metrica": METRICA_CREDITOS,
+                        "valor": creditos,
+                    },
+                ]
+            )
+    return pd.DataFrame(rows)
+
+
 def test_build_extended_analytic_df_calculates_ticket_promedio():
     analytic = build_extended_analytic_df(_long_metrics_df())
 
@@ -121,6 +180,175 @@ def test_build_extended_analytic_df_calculates_ticket_promedio():
     assert current_first["Monto"].iloc[0] == pytest.approx(30.0)
     assert current_first["Creditos"].iloc[0] == pytest.approx(2.0)
     assert current_first["Ticket_Promedio"].iloc[0] == pytest.approx(15.0)
+
+
+def test_build_monthly_analytics_series_payload_returns_real_monthly_family_series():
+    payload = build_monthly_analytics_series_payload(
+        _line_family_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=1,
+        inflation_data=_monthly_inflation_payload(),
+    )
+
+    assert payload["period"] == {
+        "current_year": 2026,
+        "previous_year": 2025,
+        "month_limit": 1,
+        "grain": "monthly_family",
+    }
+    assert payload["metadata"]["source"] == "infonavit_historico"
+    assert payload["metadata"]["grain"] == "monthly_family"
+
+    series = {(item["year"], item["month"], item["family"]): item for item in payload["series"]}
+    nueva = series[(2026, 1, "adquisicion_vivienda_nueva")]
+    assert nueva["date"] == "2026-01-01"
+    assert nueva["monto"] == pytest.approx(120.0)
+    assert nueva["creditos"] == pytest.approx(12.0)
+    assert nueva["ticket_promedio"] == pytest.approx(10.0)
+    assert nueva["inflation_factor"] == pytest.approx(1.04)
+    assert nueva["monto_real"] == pytest.approx(120.0 / 1.04)
+    assert nueva["ticket_real"] == pytest.approx(10.0 / 1.04)
+    previous_nueva = series[(2025, 1, "adquisicion_vivienda_nueva")]
+    assert previous_nueva["inflation_factor"] == pytest.approx(1.0)
+    assert previous_nueva["monto_real"] == pytest.approx(previous_nueva["monto"])
+    assert previous_nueva["ticket_real"] == pytest.approx(previous_nueva["ticket_promedio"])
+    assert "construccion_vivienda" in {item["family"] for item in payload["series"]}
+    assert payload["bcg"]
+    json.dumps(payload)
+
+
+def test_build_monthly_analytics_series_payload_uses_monthly_factors_by_month():
+    payload = build_monthly_analytics_series_payload(
+        _long_metrics_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=4,
+        inflation_data=_monthly_inflation_payload(),
+    )
+
+    series = {(item["year"], item["month"], item["family"]): item for item in payload["series"]}
+    month_1 = series[(2026, 1, "adquisicion_vivienda_nueva")]
+    month_2 = series[(2026, 2, "adquisicion_vivienda_nueva")]
+
+    assert month_1["inflation_factor"] == pytest.approx(1.04)
+    assert month_1["monto_real"] == pytest.approx(month_1["monto"] / 1.04)
+    assert month_1["ticket_real"] == pytest.approx(month_1["ticket_promedio"] / 1.04)
+    assert month_2["inflation_factor"] == pytest.approx(1.05)
+    assert month_2["monto_real"] == pytest.approx(month_2["monto"] / 1.05)
+    assert month_2["ticket_real"] == pytest.approx(month_2["ticket_promedio"] / 1.05)
+
+
+def test_build_monthly_analytics_series_payload_warns_for_missing_monthly_factor():
+    inflation_data = _monthly_inflation_payload()
+    inflation_data["factors"] = [item for item in inflation_data["factors"] if item["month"] != 2]
+
+    payload = build_monthly_analytics_series_payload(
+        _long_metrics_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=4,
+        inflation_data=inflation_data,
+    )
+
+    series = {(item["year"], item["month"], item["family"]): item for item in payload["series"]}
+    missing_month = series[(2026, 2, "adquisicion_vivienda_nueva")]
+    assert missing_month["inflation_factor"] is None
+    assert missing_month["monto_real"] is None
+    assert missing_month["ticket_real"] is None
+    assert any("2026-02" in warning for warning in payload["metadata"]["warnings"])
+
+
+def test_build_monthly_analytics_series_payload_keeps_ticket_null_for_zero_creditos():
+    df = _line_family_df()
+    mask = (
+        (df["anio"] == 2026)
+        & (df["linea"] == "Linea IV: Mejoramientos")
+        & (df["metrica"] == METRICA_CREDITOS)
+    )
+    df.loc[mask, "valor"] = 0.0
+
+    payload = build_monthly_analytics_series_payload(
+        df,
+        current_year=2026,
+        previous_year=2025,
+        month_limit=1,
+        inflation_data=None,
+    )
+
+    row = next(item for item in payload["series"] if item["year"] == 2026 and item["family"] == "mejoramiento")
+    assert row["creditos"] == pytest.approx(0.0)
+    assert row["ticket_promedio"] is None
+    assert row["monto_real"] is None
+    assert row["ticket_real"] is None
+    assert any("creditos cero" in warning for warning in payload["metadata"]["warnings"])
+    assert any("No se integro inflacion comparable" in warning for warning in payload["metadata"]["warnings"])
+
+
+def test_build_monthly_analytics_series_payload_keeps_real_values_null_without_inflation():
+    payload = build_monthly_analytics_series_payload(
+        _line_family_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=1,
+        inflation_data=None,
+    )
+
+    row = next(item for item in payload["series"] if item["year"] == 2026)
+    assert row["inflation_factor"] is None
+    assert row["monto_real"] is None
+    assert row["ticket_real"] is None
+    assert any("No se integro inflacion comparable" in warning for warning in payload["metadata"]["warnings"])
+
+
+def test_build_monthly_analytics_series_payload_excludes_families_without_data():
+    payload = build_monthly_analytics_series_payload(
+        _long_metrics_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=4,
+        inflation_data=None,
+    )
+
+    families = {item["family"] for item in payload["series"]}
+    assert "adquisicion_vivienda_nueva" in families
+    assert "adquisicion_vivienda_existente" not in families
+    assert "mejoramiento" in families
+    assert any("adquisicion_vivienda_existente" in warning for warning in payload["metadata"]["warnings"])
+
+
+def test_build_monthly_analytics_series_payload_repairs_bcg_product_mojibake():
+    payload = build_monthly_analytics_series_payload(
+        _bcg_quality_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=1,
+        inflation_data=None,
+    )
+
+    products = {item["product"] for item in payload["bcg"]}
+    assert "Crédito Tradicional" in products
+    assert "CrÃ©dito Tradicional" not in products
+
+
+def test_build_monthly_analytics_series_payload_excludes_invalid_bcg_points():
+    payload = build_monthly_analytics_series_payload(
+        _bcg_quality_df(),
+        current_year=2026,
+        previous_year=2025,
+        month_limit=1,
+        inflation_data=None,
+    )
+
+    products = {item["product"] for item in payload["bcg"]}
+    assert products == {"Crédito Tradicional"}
+    assert "Apoyo Infonavit" not in products
+    assert "Producto Sin Monto" not in products
+    assert "Producto Sin Creditos" not in products
+    assert "Producto Ticket Negativo" not in products
+    assert all(item["monto"] > 0 for item in payload["bcg"])
+    assert all(item["creditos"] > 0 for item in payload["bcg"])
+    assert all(item["ticket_promedio"] > 0 for item in payload["bcg"])
 
 
 def test_build_extended_context_calculates_ytd_monto_creditos_and_ticket_variations():
