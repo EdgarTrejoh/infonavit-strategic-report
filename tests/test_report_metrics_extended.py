@@ -139,7 +139,7 @@ def _line_family_df():
 def _bcg_quality_df():
     rows = []
     products = [
-        ("CrÃ©dito Tradicional", 100.0, 10.0),
+        ("Cr\u00c3\u00a9dito Tradicional", 100.0, 10.0),
         ("Apoyo Infonavit", 100.0, 10.0),
         ("Producto Sin Monto", 0.0, 10.0),
         ("Producto Sin Creditos", 100.0, 0.0),
@@ -328,7 +328,10 @@ def test_build_monthly_analytics_series_payload_repairs_bcg_product_mojibake():
 
     products = {item["product"] for item in payload["bcg"]}
     assert "Crédito Tradicional" in products
-    assert "CrÃ©dito Tradicional" not in products
+    assert "Cr\u00c3\u00a9dito Tradicional" not in products
+    for item in payload["bcg"]:
+        visible_strings = [item["family"], item["family_label"], item["product"]]
+        assert all("Ã" not in value and "Â" not in value for value in visible_strings)
 
 
 def test_build_monthly_analytics_series_payload_excludes_invalid_bcg_points():

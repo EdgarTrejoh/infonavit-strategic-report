@@ -393,6 +393,11 @@ def _build_analytics_bcg(
     if current.empty:
         return []
 
+    for frame in (current, previous):
+        frame["family"] = frame["family"].map(repair_mojibake_text)
+        frame["family_label"] = frame["family_label"].map(repair_mojibake_text)
+        frame["producto"] = frame["producto"].map(repair_mojibake_text)
+
     current_grouped = (
         current.groupby(["family", "family_label", "producto"], as_index=False)
         .agg({MONTO_COL: "sum", CREDITOS_COL: "sum"})
@@ -430,21 +435,20 @@ def _build_analytics_bcg(
         ticket = row["ticket_promedio"]
         monto_previous = row.get("monto_previous")
         creditos_previous = row.get("creditos_previous")
-        records.append(
-            {
-                "family": row["family"],
-                "family_label": repair_mojibake_text(row["family_label"]),
-                "product": repair_mojibake_text(row["producto"]),
-                "monto": monto,
-                "creditos": creditos,
-                "ticket_promedio": ticket,
-                "share_monto_pct": _safe_share(monto, total_monto),
-                "monto_growth_pct": None if pd.isna(monto_previous) else _safe_pct(monto, float(monto_previous)),
-                "creditos_growth_pct": None
-                if pd.isna(creditos_previous)
-                else _safe_pct(creditos, float(creditos_previous)),
-            }
-        )
+        record = {
+            "family": row["family"],
+            "family_label": row["family_label"],
+            "product": row["producto"],
+            "monto": monto,
+            "creditos": creditos,
+            "ticket_promedio": ticket,
+            "share_monto_pct": _safe_share(monto, total_monto),
+            "monto_growth_pct": None if pd.isna(monto_previous) else _safe_pct(monto, float(monto_previous)),
+            "creditos_growth_pct": None
+            if pd.isna(creditos_previous)
+            else _safe_pct(creditos, float(creditos_previous)),
+        }
+        records.append(_json_safe(record))
     return records
 
 
